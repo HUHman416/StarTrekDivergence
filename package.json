@@ -1,0 +1,17 @@
+{
+  "name": "star-trek-divergence",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "A choice-driven Star Trek strategy prototype",
+  "scripts": {
+    "dev": "python3 -m http.server 5173 --bind 0.0.0.0",
+    "start": "python3 -m http.server 5173 --bind 0.0.0.0",
+    "test": "node --test --test-isolation=none",
+    "check": "node --check src/game.js && node --check src/app.js",
+    "build": "python3 scripts/build-release.py"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

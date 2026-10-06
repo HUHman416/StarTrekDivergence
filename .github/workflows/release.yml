@@ -1,0 +1,70 @@
+name: Validate and release
+
+on:
+  push:
+    branches: [main]
+    tags: ["Alpha-v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - name: Check gameplay and syntax
+        run: |
+          npm test
+          npm run check
+          npm run build
+      - name: Install browser test tools
+        run: |
+          python3 -m pip install playwright==1.62.0
+          python3 -m playwright install --with-deps chromium
+      - name: Validate source and packaged game in Chromium
+        run: |
+          python3 -m http.server 5173 --bind 127.0.0.1 > /tmp/divergence-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:5173/ > /dev/null; then break; fi
+            sleep 1
+          done
+          export CHROMIUM_PATH="$(python3 -c 'from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()')"
+          python3 tests/browser_smoke.py
+          python3 tests/bundle_smoke.py
+
+  publish:
+    needs: validate
+    if: startsWith(github.ref, 'refs/tags/Alpha-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build release files
+        run: python3 scripts/build-release.py
+      - name: Publish versioned release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="$(python3 -c 'import json; print(json.load(open("package.json"))["version"].removesuffix(".0"))')"
+          test "$RELEASE_TAG" = "Alpha-v$version"
+          gh release create "$RELEASE_TAG" \
+            "dist/StarTrekDivergence-v$version.html" \
+            "dist/StarTrekDivergence-v$version.zip" \
+            dist/SHA256SUMS.txt \
+            --verify-tag \
+            --title "Star Trek Divergence v$version" \
+            --notes-file "docs/releases/v$version.md" \
+            --latest

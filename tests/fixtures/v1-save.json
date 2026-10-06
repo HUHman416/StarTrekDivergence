@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "faction": "earth",
+  "turn": 1,
+  "resources": {
+    "energy": 120,
+    "alloys": 90,
+    "research": 35,
+    "influence": 60
+  },
+  "relations": {
+    "vulcan": {
+      "score": 35,
+      "status": "neutral",
+      "trade": false
+    },
+    "andorian": {
+      "score": 5,
+      "status": "neutral",
+      "trade": false
+    },
+    "tellarite": {
+      "score": 10,
+      "status": "neutral",
+      "trade": false
+    },
+    "klingon": {
+      "score": -10,
+      "status": "neutral",
+      "trade": false
+    },
+    "romulan": {
+      "score": -5,
+      "status": "neutral",
+      "trade": false
+    }
+  },
+  "fleet": [
+    {
+      "id": "flagship",
+      "name": "UES Enterprise",
+      "cls": "NX-class explorer",
+      "hull": 100,
+      "maxHull": 100,
+      "shields": 70,
+      "maxShields": 70,
+      "damage": 24
+    },
+    {
+      "id": "escort",
+      "name": "UES Intrepid",
+      "cls": "Light cruiser",
+      "hull": 100,
+      "maxHull": 100,
+      "shields": 70,
+      "maxShields": 70,
+      "damage": 24
+    }
+  ],
+  "sectors": [
+    {
+      "id": "sol",
+      "name": "Sol",
+      "x": 43,
+      "y": 64,
+      "type": "Home system",
+      "detail": "The place where your journey began. Shipyards and a population looking to the stars.",
+      "surveyed": true,
+      "threat": false
+    },
+    {
+      "id": "vulcan",
+      "name": "Vulcan",
+      "x": 28,
+      "y": 38,
+      "type": "Diplomatic contact",
+      "detail": "An old civilization weighs the ambitions of its younger neighbors.",
+      "surveyed": true,
+      "threat": false
+    },
+    {
+      "id": "andoria",
+      "name": "Andoria",
+      "x": 63,
+      "y": 26,
+      "type": "Diplomatic contact",
+      "detail": "Beyond an icy moon, watchful patrols guard a fiercely independent people.",
+      "surveyed": false,
+      "threat": false
+    },
+    {
+      "id": "tellar",
+      "name": "Tellar Prime",
+      "x": 19,
+      "y": 74,
+      "type": "Trade opportunity",
+      "detail": "Bustling shipyards and formidable negotiators. A new trade route could begin here.",
+      "surveyed": false,
+      "threat": false
+    },
+    {
+      "id": "eridani",
+      "name": "Epsilon Eridani",
+      "x": 65,
+      "y": 63,
+      "type": "Distress signal",
+      "detail": "An independent convoy is trapped by unidentified marauders. Your captains await orders.",
+      "surveyed": false,
+      "threat": true
+    },
+    {
+      "id": "rim",
+      "name": "The Azure Reach",
+      "x": 82,
+      "y": 40,
+      "type": "Uncharted system",
+      "detail": "An unexplored stellar nursery rich in dilithium. Sensors detect no inhabited worlds.",
+      "surveyed": false,
+      "threat": false
+    }
+  ],
+  "location": "sol",
+  "tech": [],
+  "buildings": {
+    "reactor": 0,
+    "foundry": 0
+  },
+  "ethics": {
+    "cooperation": 0,
+    "independence": 0,
+    "force": 0
+  },
+  "eventIndex": 0,
+  "eventResolved": false,
+  "eventChoices": [],
+  "battle": null,
+  "battleCount": 0,
+  "completed": false,
+  "charter": null,
+  "log": [
+    {
+      "turn": 1,
+      "text": "Enterprise is ready. The future of United Earth is yours to write.",
+      "type": "discovery"
+    }
+  ],
+  "seed": 416,
+  "nextShip": 1
+}
