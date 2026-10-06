@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "python3 -m http.server 5173 --bind 0.0.0.0",
     "start": "python3 -m http.server 5173 --bind 0.0.0.0",
-    "test": "node --test --test-isolation=none",
+    "test": "node --test --experimental-test-isolation=none",
     "check": "node --check src/game.js && node --check src/app.js",
     "build": "python3 scripts/build-release.py"
   },
