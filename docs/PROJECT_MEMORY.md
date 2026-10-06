@@ -125,3 +125,22 @@ Run `npm run dev` from the repository; the server listens on port 5173. See READ
 - 2026-10-06: User requested that the existing GitHub README be polished and credit ChatGPT for the complete implementation, with concepts and ideas attributed to HUHman at the very top; explicitly clarified not to create a separate README.
 
 - 2026-10-06: Published v0.2 on GitHub after passing 42 tests, browser and packaged-game checks, and CI. Verified the published downloads and recorded the release link above.
+
+## v0.3 continuation and approved scope
+
+- Continued locally from the shared “Set up StarTrekDivergence” chat: https://chatgpt.com/s/cx_6ac45e8e79788191992aa0328be3ebf8 . The cloud run ended with partial, untested changes; these were not present on GitHub. Implementation resumed from main at `4f89203` in the local `game/` checkout.
+- The user approved all six requests in one pass if feasible: LCARS visuals using HUHman's LCARS Command Interface as the reference; greatly expanded exploration with discovery research and first contact before knowledge/diplomacy; comparisons of owned/unbuilt ships; first-person away missions; random monthly events; and advancing several months at once.
+- Prior requirements to maintain the root GitHub README, its exact ChatGPT/HUHman attribution, project memory, and versioned releases remain in force. Native Linux/Windows builds and the mod manager remain deferred.
+
+Implemented for v0.3:
+- An original LCARS-inspired CSS skin informed by the reference's orange elbows, pastel segments, dark background, and rounded navigation; no reference code/assets are vendored.
+- 18 schematic systems (up from six), six new technologies, six away sites, four one-time resource projects, and existing fleet assignments/branching missions.
+- Unknown civilization names and diplomacy are hidden until a visit/contact. A Vulcan delegation is present at campaign start; later origin delegations physically visit player territory as council chapters open. Further unknown-power visitors can occur after the opening chapter. No automatic wars or alliances.
+- Comparison table for all four designs and every actual vessel. Current tech bonuses, actual hull/shield condition, weapon output, costs, and special roles are visible. Starting light cruisers retain the original lighter stats and class label.
+- First-person grid-based away exploration with W/A/S/D, arrow keys, buttons, scanner map, three scan/resolve objects, two resolution approaches, recall, one-time rewards, and saved progress. Six themed scenarios currently share one corridor layout; free-roaming 3D exploration is not implemented.
+- Five seeded monthly event types at 35% probability per month, no immediate repetition, explicit choices, and always an option with no resource prerequisite. Event RNG is separate from combat RNG and persists in saves.
+- 1/3/6/12-month controls that stop for pending/new decisions, fleet arrivals, first contact, delayed results, and new aid requests. An active battle or away team blocks time advancement.
+- Save schema 3 with migrations from v0.1 and v0.2, preserving existing known contacts and campaign state. New frontier IDs, events, away coordinates/objectives, and references are validated on import.
+
+- Local validation: 55 simulation tests and syntax/build checks passed. The local browser walkthrough verified first contact visibility, decision-interrupted time advance, monthly events, away deployment/movement/scanning/recall and reload restoration, ship comparisons, tactical commands, no console errors in tested flows, and all ten routes without horizontal overflow at 390/768/1440px. Full source/frontier/bundle browser scripts are wired into GitHub CI.
+- Release workflow accepts an explicit `[release]` marker on a main-branch commit as well as version tags; it creates the tag and assets only after validation and never overwrites an existing release. This supports publication through the connected GitHub app when local push credentials are unavailable.

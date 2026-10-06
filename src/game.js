@@ -1,5 +1,5 @@
-export const GAME_VERSION = "0.2.0";
-export const SAVE_VERSION = 2;
+export const GAME_VERSION = "0.3.0";
+export const SAVE_VERSION = 3;
 export const SAVE_KEY = "divergence.campaign.v1";
 export const FACTIONS = {
   earth: {
@@ -100,6 +100,14 @@ export const TECH = {
     description: "+8 energy and +4 alloys each month.",
   },
 };
+Object.assign(TECH, {
+  sensors: { name: "Subspace tomography", cost: 65, source: "nebula", description: "+15 research on every future survey. Survey the Mutara Nebula to unlock." },
+  warp: { name: "Variable warp geometry", cost: 90, source: "cygnus", description: "Reduce journeys by one month (minimum one). Survey the Cygnus Rift to unlock." },
+  mining: { name: "Resonant extraction", cost: 70, source: "rigel", description: "+10 alloys each month. Survey the Rigel Belt to unlock." },
+  ecology: { name: "Closed-cycle biospheres", cost: 65, source: "eden", description: "+12 energy and +4 research each month. Survey New Eden to unlock." },
+  armor: { name: "Crystalline hull lattice", cost: 100, source: "relic", away: true, description: "+25 maximum hull on existing and future ships. Complete the relic away mission to unlock." },
+  medicine: { name: "Adaptive field medicine", cost: 80, source: "haven", away: true, description: "+10 research for every later away-site interaction. Complete the Haven away mission to unlock." },
+});
 const SECTORS = [
   {
     id: "sol",
@@ -168,6 +176,28 @@ const SECTORS = [
     threat: false,
   },
 ];
+// Coordinates are schematic, not a canon astronomical map.
+SECTORS.push(
+  { id: "qonos", name: "Qo’noS", x: 88, y: 78, type: "Warp signature", detail: "A busy warp corridor leads to an inhabited system.", power: "klingon" },
+  { id: "romulus", name: "Romulus", x: 83, y: 13, type: "Warp signature", detail: "Coded transmissions emanate from this distant star.", power: "romulan" },
+  { id: "nebula", name: "Mutara Nebula", x: 44, y: 16, type: "Ionized nebula", detail: "A research station lies inside a cloud that bends sensor beams.", tech: "sensors", site: "station" },
+  { id: "cygnus", name: "Cygnus Rift", x: 12, y: 14, type: "Subspace anomaly", detail: "A derelict observatory records shifting subspace currents.", tech: "warp", site: "observatory" },
+  { id: "rigel", name: "Rigel Belt", x: 13, y: 48, type: "Mineral frontier", detail: "Crystalline deposits surround an abandoned mining complex.", tech: "mining", site: "mine" },
+  { id: "eden", name: "New Eden", x: 47, y: 86, type: "Living world", detail: "A field habitat studies a remarkable self-sustaining biosphere.", tech: "ecology", site: "garden" },
+  { id: "relic", name: "Silent Archive", x: 66, y: 87, type: "Ancient ruins", detail: "An unclaimed installation preserves the work of a vanished culture.", tech: "armor", site: "archive" },
+  { id: "haven", name: "Haven Outpost", x: 67, y: 45, type: "Medical beacon", detail: "An isolated clinic needs help restoring its treatment network.", tech: "medicine", site: "clinic" },
+  { id: "pulsar", name: "Borealis Pulsar", x: 31, y: 9, type: "Stellar laboratory", detail: "A naturally repeating beacon offers a benchmark for navigation.", project: "research" },
+  { id: "vega", name: "Vega Anchorage", x: 31, y: 85, type: "Independent port", detail: "A neutral dock offers contracts to visiting explorers.", project: "energy" },
+  { id: "asterion", name: "Asterion Field", x: 91, y: 57, type: "Salvage field", detail: "Uncrewed industrial wrecks drift among metal-rich asteroids.", project: "alloys" },
+  { id: "deneb", name: "Deneb Relay", x: 9, y: 88, type: "Listening station", detail: "Repairing a civilian relay could connect isolated communities.", project: "influence" },
+);
+for (const sector of SECTORS) {
+  sector.surveyed = sector.id === "sol";
+  sector.threat = sector.threat || false;
+}
+Object.assign(SECTORS.find(x => x.id === "vulcan"), { power: "vulcan" });
+Object.assign(SECTORS.find(x => x.id === "andoria"), { power: "andorian" });
+Object.assign(SECTORS.find(x => x.id === "tellar"), { power: "tellarite" });
 const ship = (id, name, cls = "NX-class explorer") => ({
   id,
   name,
@@ -188,8 +218,17 @@ export function createGame(faction = "earth") {
   const f = FACTIONS[faction];
   const sectors = structuredClone(SECTORS);
   sectors[0].name = f.home;
+  const duplicate = sectors.find(x => x.power === faction);
+  if (duplicate) Object.assign(duplicate, { name: "Sol", power: "earth" });
   return {
     version: SAVE_VERSION,
+    contacts: ["vulcan"],
+    discoveries: [],
+    projects: [],
+    away: null,
+    awayHistory: {},
+    monthlyEvent: null,
+    eventHistory: [],
     taskForces: [
       {
         id: "expedition",
@@ -255,11 +294,12 @@ export function createGame(faction = "earth") {
     log: [
       {
         turn: 1,
-        text: `${f.ship} is ready. The future of ${f.name} is yours to write.`,
+        text: `${f.ship} is ready. A Vulcan delegation has arrived in your home system: first contact established. The future of ${f.name} is yours to write.`,
         type: "discovery",
       },
     ],
     seed: 416,
+    eventSeed: 416,
     nextShip: 1,
   };
 }
@@ -272,11 +312,11 @@ export function income(s) {
       22 +
       s.buildings.reactor * 12 +
       trades * 5 +
-      (s.tech.includes("logistics") ? 8 : 0),
+      (s.tech.includes("logistics") ? 8 : 0) + (s.tech.includes("ecology") ? 12 : 0),
     alloys:
-      12 + s.buildings.foundry * 8 + (s.tech.includes("logistics") ? 4 : 0),
+      12 + s.buildings.foundry * 8 + (s.tech.includes("logistics") ? 4 : 0) + (s.tech.includes("mining") ? 10 : 0),
     research:
-      8 +
+      8 + (s.tech.includes("ecology") ? 4 : 0) +
       Object.values(s.relations).filter((r) => r.borders && r.status !== "war")
         .length *
         2,
@@ -298,7 +338,7 @@ function pay(s, costs) {
 }
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 function relationship(s, id, delta) {
-  if (s.relations[id])
+  if (s.contacts.includes(id) && s.relations[id])
     s.relations[id].score = clamp(s.relations[id].score + delta, -100, 100);
 }
 function ethic(s, key) {
@@ -349,7 +389,7 @@ export function currentEvent(s) {
     {
       kicker: "BORDER POLITICS · THE LISTENING POST",
       title: "A truth beneath the surface.",
-      body: "Andorian scouts accuse a Vulcan monastery of concealing a surveillance array. Both sides want your support. Your science officer proposes an independent investigation.",
+      body: "Andorian scouts arrive in your home system and accuse a Vulcan monastery of concealing a surveillance array. Both sides want your support. Your science officer proposes an independent investigation.",
       choices: [
         {
           label: "Invite both sides to investigate",
@@ -387,7 +427,7 @@ export function currentEvent(s) {
     {
       kicker: "ECONOMIC POLICY · AN OPEN FRONTIER",
       title: "What is prosperity worth?",
-      body: "Tellarite merchants propose a common shipping standard. It would open your markets, but local manufacturers want protection from off-world competition.",
+      body: "Tellarite merchants visit your home system to propose a common shipping standard. It would open your markets, but local manufacturers want protection from off-world competition.",
       choices: [
         {
           label: "Open the trade lanes",
@@ -423,7 +463,7 @@ export function currentEvent(s) {
     {
       kicker: "FIRST CONTACT · BEYOND REPUTATION",
       title: "An unfamiliar hand extended.",
-      body: "A Klingon captain and a Romulan observer independently ask to meet your envoys. Your advisers disagree about their intentions. Neither power has to become your enemy.",
+      body: "A Klingon captain and a Romulan observer arrive in your territory to meet your envoys. Your advisers disagree about their intentions. Neither power has to become your enemy.",
       choices: [
         {
           label: "Invite both delegations",
@@ -566,6 +606,8 @@ export function decision(s, index) {
   return choice.effect;
 }
 export function advance(s) {
+  if (s.away) throw new Error("Recall the away team before advancing time.");
+  if (s.monthlyEvent) throw new Error("Resolve the monthly event before advancing time.");
   if (s.battle)
     throw new Error("Resolve the fleet engagement before advancing time.");
   if (currentEvent(s) && !s.eventResolved)
@@ -581,6 +623,10 @@ export function advance(s) {
     s.eventIndex++;
     s.eventResolved = false;
   }
+  // These origin delegations make physical visits to the player's home system.
+  for (const id of ({1: ["andorian"], 2: ["tellarite"], 3: ["klingon", "romulan"]}[s.eventIndex] || []))
+    meetPower(s, id, "A delegation has arrived in your home system");
+  rollMonthlyEvent(s);
   s.fleet.forEach((v) => (v.shields = v.maxShields));
   addLog(
     s,
@@ -606,7 +652,7 @@ export function survey(s, id) {
 export function diplomacy(s, id, action) {
   if (s.battle) throw new Error("Resolve the fleet engagement first.");
   const r = s.relations[id];
-  if (!r) throw new Error("Unknown diplomatic contact.");
+  if (!r || !s.contacts.includes(id)) throw new Error("First contact is required before diplomacy.");
   const name = POWERS[id].name;
   if (action === "envoy") {
     if (r.status === "war") throw new Error("Negotiate a ceasefire first.");
@@ -643,7 +689,7 @@ export function diplomacy(s, id, action) {
       betrayed ? "Broke a treaty and declared war" : "Declared war",
     );
     for (const [other, contact] of Object.entries(s.relations))
-      if (other !== id && contact.status !== "war") {
+      if (s.contacts.includes(other) && other !== id && contact.status !== "war") {
         relationship(s, other, betrayed ? -12 : -4);
         contact.trust = clamp(contact.trust - (betrayed ? 10 : 3), -100, 100);
       }
@@ -687,6 +733,7 @@ export function develop(s, kind) {
   const tech = TECH[kind];
   if (!tech || s.tech.includes(kind))
     throw new Error("This research is unavailable or already completed.");
+  if (!techAvailable(s, kind)) throw new Error("Explore the discovery site to unlock this research.");
   pay(s, { research: tech.cost });
   s.tech.push(kind);
   if (kind === "shields")
@@ -694,6 +741,7 @@ export function develop(s, kind) {
       v.maxShields += 20;
       v.shields += 20;
     });
+  if (kind === "armor") s.fleet.forEach(v => { v.maxHull += 25; v.hull += 25; });
   if (kind === "weapons") s.fleet.forEach((v) => (v.damage += 8));
   addLog(s, `${tech.name} research completed.`, "discovery");
   return `${tech.name} is now operational.`;
@@ -742,6 +790,7 @@ export function commission(s, role = "cruiser") {
     v.maxShields += 20;
   }
   if (s.tech.includes("weapons")) v.damage += 8;
+  if (s.tech.includes("armor")) { v.hull += 25; v.maxHull += 25; }
   s.fleet.push(v);
   addLog(s, `${v.name} joins the fleet.`);
   return `${v.name} commissioned.`;
@@ -768,6 +817,7 @@ export function startBattle(
   opponent = null,
   training = false,
 ) {
+  if (s.away) throw new Error("Recall the away team before engaging.");
   if (s.battle) throw new Error("An engagement is already underway.");
   const sector = s.sectors.find((x) => x.id === sectorId);
   if (!sector) throw new Error("Unknown system.");
@@ -944,7 +994,7 @@ export const ASSIGNMENTS = {
     name: "Escort convoy",
     cost: 15,
     description:
-      "Earn 35 energy and 1 Tellarite favor on arrival (+10 with a support tender).",
+      "Earn 35 energy on arrival (+10 with a support tender); a contacted Tellarite partner also grants one favor.",
   },
   patrol: {
     name: "Patrol system",
@@ -1044,6 +1094,7 @@ export function transferShip(s, id, to) {
     target = requireFleet(s, to);
   if (!v) throw new Error("Unknown vessel.");
   const source = requireFleet(s, v.fleetId);
+  if (s.away?.fleetId === source.id) throw new Error("Recall this fleet’s away team before transferring vessels.");
   if (source.id === target.id)
     throw new Error("This vessel already belongs to that fleet.");
   if (
@@ -1063,7 +1114,7 @@ export function travelTime(s, id, destination) {
     a = s.sectors.find((x) => x.id === f.location),
     b = s.sectors.find((x) => x.id === destination);
   if (!b) throw new Error("Unknown system.");
-  return Math.max(1, Math.ceil(Math.hypot(a.x - b.x, a.y - b.y) / 45));
+  return Math.max(1, Math.ceil(Math.hypot(a.x - b.x, a.y - b.y) / 45) - (s.tech.includes("warp") ? 1 : 0));
 }
 export function assignFleet(s, id, destination, kind) {
   ensurePeacefulAction(s);
@@ -1073,6 +1124,7 @@ export function assignFleet(s, id, destination, kind) {
     throw new Error("Unknown assignment.");
   if (!fleetShips(s, id).length)
     throw new Error("Assign a vessel to this fleet first.");
+  if (s.away?.fleetId === id) throw new Error("Recall this fleet’s away team before departure.");
   if (f.assignment) throw new Error("This fleet is already on assignment.");
   if (kind === "scout" && sector.surveyed)
     throw new Error("This system is already surveyed.");
@@ -1084,7 +1136,7 @@ export function assignFleet(s, id, destination, kind) {
   };
   addLog(
     s,
-    `${f.name}: ${ASSIGNMENTS[kind].name} at ${sector.name}; arrival in ${f.assignment.remaining} month(s).`,
+    `${f.name}: ${ASSIGNMENTS[kind].name} at ${sectorLabel(s, sector)}; arrival in ${f.assignment.remaining} month(s).`,
     "mission",
   );
   return "Orders acknowledged. Advance the month to progress travel.";
@@ -1092,8 +1144,13 @@ export function assignFleet(s, id, destination, kind) {
 function completeSurvey(s, sector, f) {
   if (sector.surveyed) return "Survey already completed by another fleet.";
   sector.surveyed = true;
+  meetPower(s, sector.power, `Your fleet has reached ${sector.name}`);
+  if (sector.tech && !TECH[sector.tech].away && !s.discoveries.includes(sector.tech)) {
+    s.discoveries.push(sector.tech);
+    addLog(s, `Discovery: ${TECH[sector.tech].name} can now be researched.`, "discovery");
+  }
   const research =
-    18 +
+    18 + (s.tech.includes("sensors") ? 15 : 0) +
     (s.faction === "romulan" ? 8 : 0) +
     (fleetShips(s, f.id).some((v) => v.role === "science") ? 12 : 0);
   s.resources.research += research;
@@ -1113,12 +1170,13 @@ function processAssignments(s) {
     if (!a || --a.remaining > 0) continue;
     f.location = a.destination;
     const sector = s.sectors.find((x) => x.id === a.destination);
+    meetPower(s, sector.power, `Your fleet has reached ${sector.name}`);
     if (a.kind === "scout") completeSurvey(s, sector, f);
     if (a.kind === "escort") {
       const energy =
         35 + (fleetShips(s, f.id).some((v) => v.role === "support") ? 10 : 0);
       s.resources.energy += energy;
-      if (s.relations.tellarite?.status !== "war" && s.relations.tellarite) {
+      if (s.contacts.includes("tellarite") && s.relations.tellarite?.status !== "war" && s.relations.tellarite) {
         s.relations.tellarite.favors++;
         relationship(s, "tellarite", 4);
       }
@@ -1268,8 +1326,8 @@ export function chooseMission(s, id, choiceId) {
   return "Decision recorded. Its consequences will arrive in two months.";
 }
 function trustAll(s, delta) {
-  for (const r of Object.values(s.relations))
-    if (r.status !== "war") r.trust = clamp(r.trust + delta, -100, 100);
+  for (const [id, r] of Object.entries(s.relations))
+    if (s.contacts.includes(id) && r.status !== "war") r.trust = clamp(r.trust + delta, -100, 100);
 }
 function processConsequences(s) {
   for (const item of s.consequences.filter((c) => c.due <= s.turn)) {
@@ -1350,6 +1408,7 @@ function processConsequences(s) {
 export function proposeTreaty(s, id, kind) {
   ensurePeacefulAction(s);
   const r = s.relations[id];
+  if (!s.contacts.includes(id)) throw new Error("First contact is required before diplomacy.");
   if (!r || !["borders", "research"].includes(kind))
     throw new Error("Unknown diplomatic proposal.");
   if (r.status === "war") throw new Error("Negotiate peace first.");
@@ -1385,6 +1444,7 @@ function applyTreaty(s, id, kind) {
 }
 export function answerProposal(s, id, accept) {
   ensurePeacefulAction(s);
+  if (!s.contacts.includes(id)) throw new Error("First contact is required before diplomacy.");
   const r = s.relations[id],
     p = r?.proposal;
   if (!p) throw new Error("No outstanding proposal.");
@@ -1399,6 +1459,7 @@ export function answerProposal(s, id, accept) {
 }
 export function requestFavor(s, id) {
   ensurePeacefulAction(s);
+  if (!s.contacts.includes(id)) throw new Error("First contact is required before diplomacy.");
   const r = s.relations[id];
   if (!r || r.status === "war" || r.favors < 1)
     throw new Error("You need a favor with a power at peace.");
@@ -1409,6 +1470,7 @@ export function requestFavor(s, id) {
 }
 export function answerRequest(s, id, accept) {
   ensurePeacefulAction(s);
+  if (!s.contacts.includes(id)) throw new Error("First contact is required before diplomacy.");
   const r = s.relations[id];
   if (!r?.request) throw new Error("No active request.");
   if (accept) {
@@ -1436,6 +1498,7 @@ export function answerRequest(s, id, accept) {
 }
 function processDiplomacy(s) {
   for (const [id, r] of Object.entries(s.relations)) {
+    if (!s.contacts.includes(id)) continue;
     if (r.proposal && r.proposal.expires <= s.turn) {
       r.proposal = null;
       addLog(
@@ -1508,13 +1571,13 @@ export const TUTORIAL_STEPS = [
     id: "survey",
     view: "galaxy",
     title: "3. Explore a nearby system",
-    text: "Select Tellar Prime, choose Scout system, and dispatch your fleet for 20 energy. Return to Command overview, resolve the council decision, then advance the month to arrive. A completed survey gives research, alloys, and a mission.",
+    text: "Select the highlighted system (signal 04 until contacted), choose Scout system, and dispatch your fleet for 20 energy. Return to Command overview, resolve the council decision, then advance the month to arrive. A completed survey gives research, alloys, and a mission.",
   },
   {
     id: "diplomacy",
     view: "diplomacy",
     title: "4. Make a friend",
-    text: "Send an envoy to any power at peace. Envoys improve relations once per power each month. Read their trust, requests, and treaty terms before committing.",
+    text: "Send an envoy to any contacted power at peace. Envoys improve relations once per power each month. Read their trust, requests, and treaty terms before committing.",
   },
   {
     id: "battle",
@@ -1752,7 +1815,7 @@ function migrateV1(s) {
     s.battle.friends.forEach(extend);
     s.battle.enemies.forEach(extend);
   }
-  s.version = SAVE_VERSION;
+  s.version = 2;
   for (const sector of s.sectors)
     if (sector.surveyed) unlockMission(s, sector.id);
   return s;
@@ -1790,19 +1853,21 @@ export function restoreSave(raw) {
     const unique = (values) => new Set(values).size === values.length;
     if (
       !obj(s) ||
-      ![1, SAVE_VERSION].includes(s.version) ||
+      ![1, 2, SAVE_VERSION].includes(s.version) ||
       !Object.hasOwn(FACTIONS, s.faction) ||
       !int(s.turn, 1) ||
       !arr(s.fleet, 12) ||
       !s.fleet.length ||
       !obj(s.relations) ||
-      !arr(s.sectors, 6)
+      !arr(s.sectors, SECTORS.length)
     )
       return null;
     if (s.version === 1) s = migrateV1(s);
+    if (s.version === 2) s = migrateV2(s);
+    if (!validFrontierSave(s)) return null;
     const sectorIds = SECTORS.map((x) => x.id);
     if (
-      s.sectors.length !== 6 ||
+      s.sectors.length !== SECTORS.length ||
       !unique(s.sectors.map((x) => x.id)) ||
       !s.sectors.every(
         (x) =>
@@ -1920,7 +1985,7 @@ export function restoreSave(raw) {
         return null;
     }
     if (
-      !arr(s.tech, 3) ||
+      !arr(s.tech, Object.keys(TECH).length) ||
       !unique(s.tech) ||
       !s.tech.every((t) => Object.hasOwn(TECH, t)) ||
       !obj(s.buildings) ||
@@ -2064,4 +2129,209 @@ export function restoreSave(raw) {
   } catch {
     return null;
   }
+}
+
+// Frontier content stays data-driven so it can become a future content pack.
+export function meetPower(s, id, reason) {
+  if (!id || id === s.faction || !Object.hasOwn(POWERS, id) || s.contacts.includes(id)) return false;
+  s.contacts.push(id);
+  addLog(s, `${reason}. First contact: ${POWERS[id].name}. Diplomatic channels are open.`, "discovery");
+  return true;
+}
+export function sectorLabel(s, sector) {
+  return sector.power && sector.power !== s.faction && !s.contacts.includes(sector.power)
+    ? `Unknown signal ${String(s.sectors.indexOf(sector) + 1).padStart(2, "0")}` : sector.name;
+}
+export function techAvailable(s, id) {
+  return Object.hasOwn(TECH, id) && (!TECH[id].source || s.discoveries.includes(id));
+}
+export function designStats(s, role) {
+  const r = ROLES[role];
+  return { hull: r.hull + (s.tech.includes("armor") ? 25 : 0),
+    shields: r.shields + (s.tech.includes("shields") ? 20 : 0),
+    damage: r.damage + (s.tech.includes("weapons") ? 8 : 0) + (s.faction === "klingon" ? 4 : 0) };
+}
+export function completeProject(s, id) {
+  ensurePeacefulAction(s);
+  const sector = s.sectors.find(x => x.id === id), f = activeFleet(s);
+  if (!sector?.project || !sector.surveyed || f.location !== id || f.assignment || !fleetShips(s).length)
+    throw new Error("Bring a fleet to this surveyed system first.");
+  if (s.projects.includes(id)) throw new Error("This field project is already complete.");
+  pay(s, { energy: 15 });
+  s.resources[sector.project] += 40;
+  s.projects.push(id);
+  addLog(s, `${sector.name} field project completed: +40 ${sector.project}.`, "discovery");
+  return `Field project completed: +40 ${sector.project}.`;
+}
+export const MONTHLY_EVENTS = {
+  flare: { title: "A storm over the homeworld", body: "A solar flare threatens orbital power relays. Engineering requests a decision.", choices: [
+    { label: "Reinforce the relays", effect: "15 alloys → 25 energy", cost: { alloys: 15 }, reward: { energy: 25 } },
+    { label: "Conduct a controlled shutdown", effect: "Lose up to 10 energy; gain 8 research", loss: { energy: 10 }, reward: { research: 8 } },
+  ] },
+  breakthrough: { title: "An unexpected discovery", body: "A civilian laboratory offers a promising prototype. Sponsor trials or release its findings for public use.", choices: [
+    { label: "Fund the trials", effect: "20 energy → 30 research", cost: { energy: 20 }, reward: { research: 30 } },
+    { label: "Publish openly", effect: "+12 influence", reward: { influence: 12 } },
+  ] },
+  convoy: { title: "A convoy at the border", body: "Independent settlers request material assistance. The decision will become part of your government's record.", choices: [
+    { label: "Supply the settlers", effect: "15 alloys → 20 influence", cost: { alloys: 15 }, reward: { influence: 20 } },
+    { label: "Share navigational charts", effect: "+8 research", reward: { research: 8 } },
+  ] },
+  salvage: { title: "Debris in a shipping lane", body: "An uncrewed freighter has broken apart near home. Its cargo is recoverable, but mapping the hazard also has value.", choices: [
+    { label: "Dispatch recovery drones", effect: "10 energy → 25 alloys", cost: { energy: 10 }, reward: { alloys: 25 } },
+    { label: "Map a safe passage", effect: "+10 influence", reward: { influence: 10 } },
+  ] },
+  debate: { title: "The price of the frontier", body: "Your citizens debate the next exploration budget. Both a scientific and an industrial path have supporters.", choices: [
+    { label: "Back the scientific program", effect: "+15 research", reward: { research: 15 } },
+    { label: "Back orbital manufacturing", effect: "+15 alloys", reward: { alloys: 15 } },
+  ] },
+};
+function eventRandom(s) {
+  s.eventSeed = (s.eventSeed * 1664525 + 1013904223) >>> 0;
+  return s.eventSeed / 4294967296;
+}
+function rollMonthlyEvent(s) {
+  // Origin delegations visit during the opening chapter; later visitors are random.
+  const unknown = Object.keys(s.relations).filter(id => !s.contacts.includes(id));
+  if (s.eventIndex >= 6 && unknown.length && eventRandom(s) < 0.18)
+    meetPower(s, unknown[Math.floor(eventRandom(s) * unknown.length)], "An exploratory vessel has entered your home system");
+  if (eventRandom(s) < 0.35) {
+    const ids = Object.keys(MONTHLY_EVENTS).filter(id => id !== s.eventHistory.at(-1)?.id);
+    s.monthlyEvent = { id: ids[Math.floor(eventRandom(s) * ids.length)], turn: s.turn };
+    addLog(s, `Priority transmission: ${MONTHLY_EVENTS[s.monthlyEvent.id].title}. Your decision is needed.`, "event");
+  }
+}
+export function resolveMonthlyEvent(s, index) {
+  ensurePeacefulAction(s);
+  const event = s.monthlyEvent, choice = MONTHLY_EVENTS[event?.id]?.choices[index];
+  if (!choice) throw new Error("No monthly event choice is available.");
+  pay(s, choice.cost || {});
+  for (const [key, amount] of Object.entries(choice.loss || {})) s.resources[key] = Math.max(0, s.resources[key] - amount);
+  for (const [key, amount] of Object.entries(choice.reward || {})) s.resources[key] += amount;
+  s.eventHistory.push({ id: event.id, turn: event.turn, choice: index });
+  s.eventHistory = s.eventHistory.slice(-30);
+  s.monthlyEvent = null;
+  addLog(s, `${MONTHLY_EVENTS[event.id].title}: ${choice.label}. ${choice.effect}.`, "decision");
+  return choice.effect;
+}
+export function advanceMonths(s, count) {
+  if (![1, 3, 6, 12].includes(count)) throw new Error("Choose 1, 3, 6, or 12 months.");
+  let elapsed = 0, reason = "Requested interval complete.";
+  for (; elapsed < count;) {
+    if (s.battle || s.away || s.monthlyEvent || (currentEvent(s) && !s.eventResolved)) {
+      reason = s.away ? "Away team requires recall." : s.battle ? "Fleet engagement requires attention." : "A decision needs your attention.";
+      break;
+    }
+    const contacts = s.contacts.length, travelling = s.taskForces.filter(f => f.assignment).map(f => f.id),
+      pending = s.consequences.length, requests = Object.values(s.relations).filter(r => r.request).length;
+    advance(s); elapsed++;
+    if (s.monthlyEvent || (currentEvent(s) && !s.eventResolved)) reason = "A decision needs your attention.";
+    else if (s.contacts.length > contacts) reason = "First contact established.";
+    else if (travelling.some(id => !s.taskForces.find(f => f.id === id).assignment)) reason = "A fleet has arrived.";
+    else if (s.consequences.length < pending) reason = "Mission results are ready.";
+    else if (Object.values(s.relations).filter(r => r.request).length > requests) reason = "A diplomatic request needs your attention.";
+    else continue;
+    break;
+  }
+  return `${elapsed} of ${count} month(s) advanced. ${reason}`;
+}
+
+export const AWAY_LAYOUT = ["#########", "#.......#", "#..#.#..#", "#..#.#..#", "#.......#", "#..#.#..#", "#.......#", "#.......#", "#########"];
+export const AWAY_SITES = {
+  station: { title: "The stormbound station", color: "#829af1", intro: "You materialize inside a silent sensor station. Ion storms flash beyond its sealed windows.", objects: ["Sensor console", "A trapped researcher", "Subspace telescope"], scans: ["A power surge erased the calibration. The backup is intact.", "A researcher is alive inside a locked lab. A local override still responds.", "The telescope has recorded a new way of reading subspace echoes."] },
+  observatory: { title: "At the edge of the rift", color: "#b8a2e8", intro: "The observatory hums around you. Light outside the viewports bends into impossible arcs.", objects: ["Navigation recorder", "Warp-field generator", "Chronometric archive"], scans: ["The recorder tracks stable paths between subspace currents.", "The generator can be safely deactivated for a detailed study.", "Two clocks disagree. The difference encodes a route through the rift."] },
+  mine: { title: "Beneath the Rigel Belt", color: "#ffb77f", intro: "Your boots settle on a mining platform. Deep beneath it, luminous crystals pulse in the rock.", objects: ["Crystal seam", "Mining controller", "Geological core"], scans: ["The deposit responds to sound. Extraction could avoid explosive drilling.", "Autonomous cutters have stalled. Resetting them will recover samples.", "The core reveals a safer way to reinforce industrial tools."] },
+  garden: { title: "The breathing habitat", color: "#9ad6b6", intro: "You enter a field habitat surrounded by living vines. The air is warm and unexpectedly clean.", objects: ["Bioluminescent grove", "Environmental console", "Seed repository"], scans: ["The grove filters toxins without consuming its host soil.", "Water and energy circulate in a closed ecological loop.", "The seed bank can provide a small sample without harming the habitat."] },
+  archive: { title: "Voices of the silent archive", color: "#f39ac1", intro: "You step into a hall of angular stone. A lattice of crystalline light responds to your presence.", objects: ["Memory pillar", "Lattice forge", "Archive heart"], scans: ["The pillar describes a civilization that chose to leave its knowledge behind.", "The forge arranges crystals into a lightweight protective structure.", "The archive permits a non-destructive copy, or a physical extraction."] },
+  clinic: { title: "A light at Haven", color: "#8dc8e2", intro: "You arrive in a damaged frontier clinic. Emergency lights guide you toward its treatment bays.", objects: ["Triage terminal", "Medical synthesizer", "Patient archive"], scans: ["The terminal identifies which treatment supplies are missing.", "A damaged regulator prevents the synthesis of essential medicine.", "Anonymized treatment records could improve future field medicine."] },
+};
+export const AWAY_OBJECT_POSITIONS = [{x:2,y:6}, {x:6,y:4}, {x:4,y:1}];
+export function startAway(s, id) {
+  ensurePeacefulAction(s);
+  if (s.away) throw new Error("An away team is already deployed.");
+  const sector = s.sectors.find(x => x.id === id), f = activeFleet(s);
+  if (!sector?.site || !sector.surveyed || f.assignment || f.location !== id || !fleetShips(s).length)
+    throw new Error("Survey the site and bring a fleet into orbit first.");
+  if (s.awayHistory[id]?.length === 3) throw new Error("All objectives at this site are complete.");
+  pay(s, { energy: 10 });
+  s.away = { sectorId: id, fleetId: f.id, x: 4, y: 7, direction: 0, scanned: [], resolved: [...(s.awayHistory[id] || [])], message: AWAY_SITES[sector.site].intro };
+  return "Away team deployed. Use the movement controls or W/A/S/D and your scanner.";
+}
+export function awayNear(s) {
+  if (!s.away) return [];
+  return AWAY_OBJECT_POSITIONS.map((p, i) => ({ ...p, i })).filter(p => Math.abs(p.x-s.away.x)+Math.abs(p.y-s.away.y) <= 1);
+}
+export function awayAction(s, action, index) {
+  const a = s.away;
+  if (!a) throw new Error("No away team is deployed.");
+  if (action === "recall") {
+    s.awayHistory[a.sectorId] = [...a.resolved]; s.away = null;
+    return "Away team safely recalled. Completed objectives are preserved.";
+  }
+  if (action === "left" || action === "right") a.direction = (a.direction + (action === "left" ? 3 : 1)) % 4;
+  else if (action === "forward" || action === "back") {
+    const [dx,dy] = [[0,-1],[1,0],[0,1],[-1,0]][a.direction], sign = action === "forward" ? 1 : -1,
+      x = a.x+dx*sign, y = a.y+dy*sign;
+    if (AWAY_LAYOUT[y]?.[x] !== ".") throw new Error("A bulkhead blocks the path. Turn to find another route.");
+    a.x=x; a.y=y;
+  } else if (action === "scan" || action === "study" || action === "salvage") {
+    if (!Number.isInteger(index) || !awayNear(s).some(p => p.i === index)) throw new Error("Move next to the object to interact.");
+    if (a.resolved.includes(index)) throw new Error("This objective is already complete.");
+    const sector = s.sectors.find(x => x.id === a.sectorId), site = AWAY_SITES[sector.site];
+    if (action === "scan") {
+      if (!a.scanned.includes(index)) a.scanned.push(index);
+      a.message = site.scans[index];
+    } else {
+      if (!a.scanned.includes(index)) throw new Error("Scan the object before deciding how to proceed.");
+      const study = action === "study", bonus = s.tech.includes("medicine") ? 10 : 0;
+      s.resources[study ? "research" : "alloys"] += study ? 18 : 15;
+      s.resources.research += bonus;
+      if (study) s.resources.influence += 5;
+      a.resolved.push(index);
+      s.awayHistory[a.sectorId] = [...a.resolved];
+      a.message = study ? "You preserve the site and complete the work: +18 research, +5 influence." : "You recover usable material: +15 alloys. The site’s scientific value is lost.";
+      if (bonus) a.message += " Field medicine adds +10 research.";
+      addLog(s, `${sector.name} — ${site.objects[index]}: ${a.message}`, "mission");
+      if (a.resolved.length === 3) {
+        if (sector.tech && !s.discoveries.includes(sector.tech)) s.discoveries.push(sector.tech);
+        a.message += " All objectives complete. Recall the team when ready.";
+        addLog(s, `${sector.name} away mission completed. ${sector.tech ? TECH[sector.tech].name + " research unlocked." : ""}`, "discovery");
+      }
+    }
+  } else throw new Error("Unknown away-team command.");
+  return ["forward", "back", "left", "right"].includes(action) ? "" : a.message;
+}
+function migrateV2(s) {
+  // Previously known powers remain known, including existing wars and treaties.
+  s.contacts = Object.keys(s.relations);
+  s.discoveries = []; s.projects = []; s.away = null; s.awayHistory = {};
+  s.monthlyEvent = null; s.eventHistory = []; s.eventSeed = 416;
+  const base = createGame(s.faction);
+  const legacyIds = ["sol", "vulcan", "andoria", "tellar", "eridani", "rim"];
+  if (s.sectors.length !== 6 || !s.sectors.every(x => legacyIds.includes(x.id)) || new Set(s.sectors.map(x=>x.id)).size !== 6)
+    throw new Error("Invalid legacy star chart.");
+  s.sectors.push(...base.sectors.filter(x => !legacyIds.includes(x.id)));
+  s.version = SAVE_VERSION;
+  return s;
+}
+function validFrontierSave(s) {
+  const unique = xs => Array.isArray(xs) && new Set(xs).size === xs.length;
+  const ids = (xs, allowed) => unique(xs) && xs.every(x => allowed.includes(x));
+  const uint = n => Number.isInteger(n) && n >= 0 && n <= 0xffffffff;
+  if (!ids(s.contacts, Object.keys(s.relations)) || !ids(s.discoveries, Object.keys(TECH).filter(k => TECH[k].source)) ||
+      !ids(s.projects, SECTORS.filter(x => x.project).map(x => x.id)) || !uint(s.eventSeed) ||
+      !s.awayHistory || typeof s.awayHistory !== "object" || Array.isArray(s.awayHistory) ||
+      !Array.isArray(s.eventHistory) || s.eventHistory.length > 30) return false;
+  const eventValid = e => e && Object.hasOwn(MONTHLY_EVENTS,e.id) && Number.isInteger(e.turn) && e.turn >= 1 && e.turn <= s.turn;
+  if (s.monthlyEvent !== null && !eventValid(s.monthlyEvent)) return false;
+  if (!s.eventHistory.every(e => eventValid(e) && [0,1].includes(e.choice))) return false;
+  for (const [id, objectives] of Object.entries(s.awayHistory))
+    if (!SECTORS.some(x => x.id === id && x.site) || !ids(objectives, [0,1,2])) return false;
+  if (s.away !== null) {
+    const a = s.away, sector = s.sectors.find(x => x.id === a?.sectorId), f = s.taskForces?.find(x => x.id === a?.fleetId);
+    if (!a || !SECTORS.some(x => x.id === a.sectorId && x.site) || !sector?.surveyed || !f || f.location !== a.sectorId || f.assignment || s.battle ||
+        !s.fleet.some(v => v.fleetId === f.id) || !Number.isInteger(a.x) || !Number.isInteger(a.y) || AWAY_LAYOUT[a.y]?.[a.x] !== "." ||
+        ![0,1,2,3].includes(a.direction) || !ids(a.scanned,[0,1,2]) || !ids(a.resolved,[0,1,2]) ||
+        JSON.stringify(a.resolved) !== JSON.stringify(s.awayHistory[a.sectorId] || []) || typeof a.message !== "string" || a.message.length > 1500) return false;
+  }
+  return true;
 }
