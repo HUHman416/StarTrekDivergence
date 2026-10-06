@@ -22,6 +22,7 @@ with sync_playwright() as p:
         page.locator(selector).click()
     def next_month():
         nav('overview')
+        if page.locator('[data-action="monthly"]').count(): action('monthly', index='1')
         choice = page.locator('[data-action="decision"][data-index="0"]')
         if choice.count(): choice.click()
         page.get_by_role('button', name='Next month').click()
@@ -43,12 +44,12 @@ with sync_playwright() as p:
     assert saved()['taskForces'][0]['location'] == 'tellar'
     assert '4. Make a friend' in page.locator('.tutorial-banner').inner_text()
     action('tutorialGo')
-    action('diplomacy', id='romulan', kind='envoy')
+    action('diplomacy', id='andorian', kind='envoy')
     assert '5. Take the bridge' in page.locator('.tutorial-banner').inner_text()
-    action('treaty', id='romulan', kind='borders')
-    assert saved()['relations']['romulan']['proposal'] is not None
-    action('answerProposal', id='romulan', kind='accept')
-    assert saved()['relations']['romulan']['borders'] is True
+    action('treaty', id='andorian', kind='borders')
+    assert saved()['relations']['andorian']['proposal'] is not None
+    action('answerProposal', id='andorian', kind='accept')
+    assert saved()['relations']['andorian']['borders'] is True
     action('answerRequest', id='vulcan', kind='accept')
     action('favor', id='vulcan')
     action('declare', id='vulcan')
@@ -145,7 +146,7 @@ with sync_playwright() as p:
     # Legacy migration through the same import flow.
     page.locator('#import-file').set_input_files(str(ROOT / 'tests/fixtures/v1-save.json'))
     action('confirmImport')
-    assert saved()['version'] == 2
+    assert saved()['version'] == 3
     assert saved()['fleet'][0]['registry'] == 'NX-01'
     # Restore expanded campaign for responsive pages.
     nav('help'); page.locator('#import-file').set_input_files(str(exported)); action('confirmImport')

@@ -39,11 +39,12 @@ jobs:
           done
           export CHROMIUM_PATH="$(python3 -c 'from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()')"
           python3 tests/browser_smoke.py
+          python3 tests/frontier_browser.py
           python3 tests/bundle_smoke.py
 
   publish:
     needs: validate
-    if: startsWith(github.ref, 'refs/tags/Alpha-v')
+    if: startsWith(github.ref, 'refs/tags/Alpha-v') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -59,12 +60,22 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           version="$(python3 -c 'import json; print(json.load(open("package.json"))["version"].removesuffix(".0"))')"
-          test "$RELEASE_TAG" = "Alpha-v$version"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            test "$RELEASE_TAG" = "Alpha-v$version"
+          else
+            RELEASE_TAG="Alpha-v$version"
+          fi
+          # A marked main-branch commit creates its version tag after validation.
+          # An existing release is never replaced by a rerun.
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            echo "Release already exists; leaving historical assets unchanged."
+            exit 0
+          fi
           gh release create "$RELEASE_TAG" \
             "dist/StarTrekDivergence-v$version.html" \
             "dist/StarTrekDivergence-v$version.zip" \
             dist/SHA256SUMS.txt \
-            --verify-tag \
+            --target "$GITHUB_SHA" \
             --title "Star Trek Divergence v$version" \
             --notes-file "docs/releases/v$version.md" \
             --latest

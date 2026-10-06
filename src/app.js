@@ -1,5 +1,8 @@
 import {
   GAME_VERSION,
+  MONTHLY_EVENTS, AWAY_SITES, AWAY_LAYOUT, AWAY_OBJECT_POSITIONS,
+  sectorLabel, techAvailable, designStats, completeProject,
+  startAway, awayAction, awayNear, advanceMonths, resolveMonthlyEvent,
   ROLES,
   ASSIGNMENTS,
   MISSION_DEFS,
@@ -22,7 +25,7 @@ import {
   setTutorial,
   setPower,
   exportSave,
-  SAVE_KEY,
+  SAVE_KEY, SAVE_VERSION,
   FACTIONS,
   POWERS,
   TECH,
@@ -49,12 +52,13 @@ try {
   /* Storage may be unavailable in private contexts. */
 }
 let state = saved || createGame("earth");
-let view = state.battle ? "tactical" : "overview";
+let view = state.battle ? "tactical" : state.away ? "away" : "overview";
 let sectorId = "eridani";
 let modal = null;
 let toastTimer;
 let saveAvailable = true;
 let commissionRole = "cruiser";
+let monthsToAdvance = 1;
 const escape = (value) =>
   String(value).replace(
     /[&<>"']/g,
@@ -138,6 +142,7 @@ const navigation = [
   ["research", "science", "Research & industry"],
   ["tactical", "target", "Tactical simulator"],
   ["missions", "compass", "Mission journal"],
+  ["away", "compass", "Away team"],
   ["log", "book", "Captain’s log"],
   ["help", "book", "Academy & saves"],
 ];
@@ -148,7 +153,7 @@ function render() {
       <a href="#overview" class="brand" data-action="nav" data-view="overview" aria-label="Star Trek Divergence overview">${delta()}<span><span class="brand-small">STAR TREK</span><strong>DIVERGENCE</strong><span class="brand-caption">WRITE YOUR OWN FUTURE</span></span></a>
       <div class="nav-label">COMMAND INTERFACE <span>01</span></div>
       <nav aria-label="Main navigation">${navigation.map(([id, i, label]) => `<button data-action="nav" data-view="${id}" aria-label="${label}" title="${label}" class="nav-item ${view === id ? "active" : ""}" ${view === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${label}</span>${id === "tactical" && state.battle ? '<i class="red-dot"></i>' : ""}${id === "overview" && !state.eventResolved && currentEvent(state) ? '<span class="nav-count">1</span>' : ""}</button>`).join("")}</nav>
-      <div class="sidebar-bottom"><div class="quote">“Somewhere, something<br>incredible is waiting<br>to be known.”</div><div class="faction-id">${delta()}<div><strong>${FACTIONS[state.faction].name}</strong><span>${state.charter ? "FOUNDING CHARTER RATIFIED" : "EARLY WARP ERA · 2151"}</span></div><span class="online-dot"></span></div><button class="new-campaign" data-action="new">New campaign ${icon("arrow")}</button><div class="build-label">FAN PROJECT <span>ALPHA v0.2</span></div></div>
+      <div class="sidebar-bottom"><div class="quote">“Somewhere, something<br>incredible is waiting<br>to be known.”</div><div class="faction-id">${delta()}<div><strong>${FACTIONS[state.faction].name}</strong><span>${state.charter ? "FOUNDING CHARTER RATIFIED" : "EARLY WARP ERA · 2151"}</span></div><span class="online-dot"></span></div><button class="new-campaign" data-action="new">New campaign ${icon("arrow")}</button><div class="build-label">FAN PROJECT <span>ALPHA v0.3</span></div></div>
     </aside>
     <div class="workspace"><header class="topbar"><div class="breadcrumb">FLEET OPERATIONS <span>/</span> <strong>${navigation.find((n) => n[0] === view)?.[2].toUpperCase()}</strong></div><div class="topbar-right"><span class="save-state">${icon("check")} ${saveAvailable ? "AUTOSAVE ACTIVE" : "STORAGE UNAVAILABLE"}</span><button class="icon-button" data-action="save" aria-label="Save campaign">${icon("save")}</button><button class="icon-button" data-action="new" aria-label="Choose a new faction" title="New campaign">${icon("plus")}</button><button class="icon-button" data-action="nav" data-view="help" aria-label="Help and saves" title="Tutorial and save files">?</button><span class="commander-avatar">C</span></div></header>
     <div class="resourcebar">${Object.entries(state.resources)
@@ -159,7 +164,7 @@ function render() {
       .join(
         "",
       )}<div class="stardate"><span class="resource-label">MISSION DATE</span><strong>${date()} <small>MONTH ${String(state.turn).padStart(2, "0")}</small></strong></div></div>
-    <main id="main">${tutorialBanner()}${{ overview, galaxy, fleet, diplomacy: diplomacyView, research, tactical, missions: missionsView, help: helpView, log: logView }[view]()}</main>
+    <main id="main">${tutorialBanner()}${priorityTransmission()}${{ overview, galaxy, fleet, diplomacy: diplomacyView, research, tactical, missions: missionsView, help: helpView, log: logView, away: awayView }[view]()}</main>
     <footer class="footer"><span><i class="online-dot"></i> ${state.battle ? "TACTICAL LINK ESTABLISHED" : "SUBSPACE LINK ESTABLISHED"}</span><span>THE FUTURE IS UNWRITTEN.</span><span>LOCAL CAMPAIGN · ${saveAvailable ? "AUTO-SAVED" : "UNSAVED"}</span></footer></div>
   </div>${modal ? renderModal() : ""}`;
   if (modal) {
@@ -177,7 +182,7 @@ function starMap(expanded = false) {
     const y = (i * 73.73 + 7) % 100;
     stars += `<circle cx="${x}%" cy="${y}%" r="${i % 6 === 0 ? 1.2 : 0.65}" fill="#b1c7d5" opacity="${0.15 + (i % 5) * 0.12}"/>`;
   }
-  return `<div class="star-map ${expanded ? "expanded" : ""}"><div class="map-grid"></div><div class="map-nebula"></div><svg class="starfield" width="100%" height="100%" aria-hidden="true">${stars}<svg viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height="100%"><path d="M43 64 28 38 63 26M43 64 19 74M43 64 65 63 82 40" fill="none" stroke="#89aab6" stroke-opacity=".2" stroke-width=".2" stroke-dasharray="1 1.3"/><ellipse cx="43" cy="64" rx="27" ry="33" fill="none" stroke="#8cb7c4" stroke-opacity=".15" stroke-width=".2"/></svg></svg><span class="map-coordinate">SECTOR 001 // LOCAL SPACE</span><span class="map-region">ALPHA QUADRANT</span>${state.sectors.map((s) => `<button class="system ${s.id === sectorId ? "selected" : ""} ${s.threat ? "hostile" : ""} ${s.id === state.location ? "home" : ""}" style="left:${s.x}%;top:${s.y}%" data-action="sector" data-id="${s.id}" aria-label="Select ${escape(s.name)}${s.threat ? ", distress signal" : ""}" aria-pressed="${s.id === sectorId}"><span class="system-dot">${s.id === state.location ? "✦" : ""}</span><span class="system-name">${escape(s.name)}</span>${s.threat ? '<span class="signal-label">DISTRESS SIGNAL</span>' : s.id === state.location ? '<span class="home-label">YOUR FLEET</span>' : ""}</button>`).join("")}<div class="map-legend"><span><i class="legend-dot blue"></i> CHARTED</span><span><i class="legend-dot orange"></i> ACTIVE SIGNAL</span><span>1 SECTOR ≈ 10 LY</span></div></div>`;
+  return `<div class="star-map ${expanded ? "expanded" : ""}"><div class="map-grid"></div><div class="map-nebula"></div><svg class="starfield" width="100%" height="100%" aria-hidden="true">${stars}<svg viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height="100%"><path d="M43 64 28 38 63 26M43 64 19 74M43 64 65 63 82 40" fill="none" stroke="#89aab6" stroke-opacity=".2" stroke-width=".2" stroke-dasharray="1 1.3"/><ellipse cx="43" cy="64" rx="27" ry="33" fill="none" stroke="#8cb7c4" stroke-opacity=".15" stroke-width=".2"/></svg></svg><span class="map-coordinate">SECTOR 001 // LOCAL SPACE</span><span class="map-region">ALPHA QUADRANT</span>${state.sectors.map((s) => `<button class="system ${s.id === sectorId ? "selected" : ""} ${s.threat ? "hostile" : ""} ${s.id === state.location ? "home" : ""}" style="left:${s.x}%;top:${s.y}%" data-action="sector" data-id="${s.id}" aria-label="Select ${escape(sectorLabel(state, s))}${s.threat ? ", distress signal" : ""}" aria-pressed="${s.id === sectorId}"><span class="system-dot">${s.id === state.location ? "✦" : ""}</span><span class="system-name">${escape(sectorLabel(state, s))}</span>${s.threat ? '<span class="signal-label">DISTRESS SIGNAL</span>' : s.id === state.location ? '<span class="home-label">YOUR FLEET</span>' : ""}</button>`).join("")}<div class="map-legend"><span><i class="legend-dot blue"></i> CHARTED</span><span><i class="legend-dot orange"></i> ACTIVE SIGNAL</span><span>1 SECTOR ≈ 10 LY</span></div></div>`;
 }
 function overview() {
   const event = currentEvent(state);
@@ -186,9 +191,9 @@ function overview() {
   ).length;
   return `${heading("YOUR VOYAGE BEGINS HERE", "A future of your own making.", "Explore the unknown. Choose your allies. Give your people a tomorrow.", `<div class="heading-tag">${icon("compass")} ${state.charter ? "A NEW CHAPTER" : "THE FIRST FRONTIER"}</div>`)}
   <section class="hero panel"><div class="hero-orbits"></div><div class="hero-content"><div class="eyebrow"><span class="live-dot"></span> ${FACTIONS[state.faction].era}</div><h2>${state.charter ? escape(state.charter) : FACTIONS[state.faction].title}</h2><p>${state.charter ? `Your founding charter is signed. ${state.founders?.length || 0} allied powers stand with you. The next chapter remains yours to write.` : "Before the alliances. Before the legends. A single ship, an open sky, and the courage to choose a different path."}</p><button class="text-button" data-action="nav" data-view="galaxy">Chart your course ${icon("arrow")}</button></div><div class="hero-emblem">${delta()}<span>AD ASTRA PER ASPERA</span></div><div class="hero-index">ORIGINS <span>/ 01</span></div></section>
-  <div class="overview-grid"><section class="panel sector-panel"><div class="panel-heading"><h2>${icon("galaxy")} The local frontier</h2><button class="text-button small" data-action="nav" data-view="galaxy">Open star chart ${icon("arrow")}</button></div>${starMap()}<div class="map-caption"><span>${icon("compass")} ${state.sectors.filter((s) => s.surveyed).length} of 6 systems surveyed</span><span>${state.sectors.some((s) => s.threat) ? '<i class="orange-dot"></i> 1 active distress signal' : `${icon("check")} Local shipping lanes secure`}</span></div></section>
+  <div class="overview-grid"><section class="panel sector-panel"><div class="panel-heading"><h2>${icon("galaxy")} The local frontier</h2><button class="text-button small" data-action="nav" data-view="galaxy">Open star chart ${icon("arrow")}</button></div>${starMap()}<div class="map-caption"><span>${icon("compass")} ${state.sectors.filter((s) => s.surveyed).length} of ${state.sectors.length} systems surveyed</span><span>${state.sectors.some((s) => s.threat) ? '<i class="orange-dot"></i> 1 active distress signal' : `${icon("check")} Local shipping lanes secure`}</span></div></section>
   <section class="panel council-panel"><div class="panel-heading"><h2>${icon("diplomacy")} The council awaits</h2><span class="tag ${state.eventResolved ? "" : "amber"}">${state.eventResolved ? "RESOLVED" : event ? "DECISION" : "CHARTER SIGNED"}</span></div><div class="council-content"><div class="eyebrow">${event?.kicker || "YOUR NEXT CHAPTER"}</div><h2>${event?.title || "History is still being written."}</h2><p>${event?.body || "Your founding convention is complete. Continue exploring, building your fleet, conducting research, and shaping your relationships with the galaxy."}</p>${state.eventResolved ? `<div class="decision-made">${icon("check")} ${escape(state.eventChoices.at(-1).choice)}<small>Your decision has become part of your history.</small></div>` : event ? `<div class="choices">${event.choices.map((c, i) => `<button class="choice" data-action="decision" data-index="${i}"><span class="choice-number">0${i + 1}</span><span><strong>${c.label}</strong><small>${c.effect}</small></span>${icon("chevron")}</button>`).join("")}</div>` : button("Read your captain’s log " + icon("arrow"), "nav", "secondary", 'data-view="log"')}</div></section></div>
-  <div class="bottom-grid"><section class="panel fleet-summary"><div class="panel-heading"><h2>${icon("fleet")} ${escape(activeFleet(state).name)}</h2><button class="text-button small" data-action="nav" data-view="fleet">Manage fleet ${icon("arrow")}</button></div><div class="fleet-mini">${shipArt()}<div><div class="eyebrow">FLAGSHIP · ${escape(state.fleet[0].cls)}</div><h3>${escape(state.fleet[0].name)}</h3><small class="registry">${escape(state.fleet[0].registry)}</small><p>${state.fleet.length} vessels across ${state.taskForces.length} fleets <span>•</span> ${state.fleet.every((v) => v.hull === v.maxHull) ? "All systems operational" : "Repairs recommended"}</p></div><div class="mini-status"><span class="online-dot"></span> ${state.battle ? "ENGAGED" : "STANDING BY"}</div></div></section><section class="panel next-turn"><div><div class="eyebrow">EVERY CHOICE LEAVES A MARK</div><h3>${allies} ${allies === 1 ? "alliance" : "alliances"}. Countless possibilities.</h3><p>Advance one month to receive production.</p></div>${button("Next month " + icon("arrow"), "advance", "primary", state.battle || (event && !state.eventResolved) ? 'disabled title="Resolve the current council decision or battle first"' : "")}</section></div>`;
+  <div class="bottom-grid"><section class="panel fleet-summary"><div class="panel-heading"><h2>${icon("fleet")} ${escape(activeFleet(state).name)}</h2><button class="text-button small" data-action="nav" data-view="fleet">Manage fleet ${icon("arrow")}</button></div><div class="fleet-mini">${shipArt()}<div><div class="eyebrow">FLAGSHIP · ${escape(state.fleet[0].cls)}</div><h3>${escape(state.fleet[0].name)}</h3><small class="registry">${escape(state.fleet[0].registry)}</small><p>${state.fleet.length} vessels across ${state.taskForces.length} fleets <span>•</span> ${state.fleet.every((v) => v.hull === v.maxHull) ? "All systems operational" : "Repairs recommended"}</p></div><div class="mini-status"><span class="online-dot"></span> ${state.battle ? "ENGAGED" : "STANDING BY"}</div></div></section><section class="panel next-turn"><div><div class="eyebrow">EVERY CHOICE LEAVES A MARK</div><h3>${allies} ${allies === 1 ? "alliance" : "alliances"}. Countless possibilities.</h3><p>Advance time for production and fleet travel. Stops automatically when you are needed.</p></div>${timeControls()}</section></div>`;
 }
 function fleetSelector() {
   return `<div class="fleet-selector" aria-label="Select active fleet">${state.taskForces.map((f) => `<button class="fleet-tab ${f.id === state.activeFleetId ? "active" : ""}" data-action="selectFleet" data-id="${f.id}" aria-pressed="${f.id === state.activeFleetId}"><strong>${escape(f.name)}</strong><span>${escape(f.designation)} · ${fleetShips(state, f.id).length} ships · ${f.assignment ? `Arriving in ${f.assignment.remaining} mo` : escape(state.sectors.find((x) => x.id === f.location).name)}</span></button>`).join("")}</div>`;
@@ -197,11 +202,11 @@ function galaxy() {
   const s = state.sectors.find((x) => x.id === sectorId),
     f = activeFleet(state);
   const here = f.location === s.id && !f.assignment;
-  return `${heading("ASTROMETRICS", "The galaxy is an invitation.", "Assign independent fleets to explore, escort convoys, patrol, or move between systems.")}${fleetSelector()}
- <div class="galaxy-layout"><section class="panel">${starMap(true)}</section><section class="panel system-detail"><div class="eyebrow">SYSTEM INTELLIGENCE</div><span class="tag ${s.threat ? "amber" : ""}">${s.type}</span><h2>${escape(s.name)}</h2><p>${s.detail}</p><dl><div><dt>Survey</dt><dd>${s.surveyed ? "Complete" : "Uncharted"}</dd></div><div><dt>Active fleet</dt><dd>${escape(f.designation)}</dd></div><div><dt>Travel time</dt><dd>${travelTime(state, f.id, s.id)} month(s)</dd></div><div><dt>Defensive patrol</dt><dd>${s.prepared ? "Prepared: +15 shields" : "Not prepared"}</dd></div></dl>
+  return `${heading("ASTROMETRICS", "The galaxy is an invitation.", "Assign independent fleets to explore, escort convoys, patrol, or move between systems.")}${fleetSelector()}<div class="system-index" aria-label="All systems">${state.sectors.map(x => `<button class="button secondary" data-action="sector" data-id="${x.id}" aria-pressed="${x.id === sectorId}">${escape(sectorLabel(state,x))}${x.surveyed ? " · ✓" : ""}</button>`).join("")}</div>
+ <div class="galaxy-layout"><section class="panel">${starMap(true)}</section><section class="panel system-detail"><div class="eyebrow">SYSTEM INTELLIGENCE</div><span class="tag ${s.threat ? "amber" : ""}">${s.type}</span><h2>${escape(sectorLabel(state, s))}</h2><p>${s.power && !state.contacts.includes(s.power) ? "An unidentified civilization may be here. Visit the system to establish first contact." : s.detail}</p><dl><div><dt>Survey</dt><dd>${s.surveyed ? "Complete" : "Uncharted"}</dd></div><div><dt>Active fleet</dt><dd>${escape(f.designation)}</dd></div><div><dt>Travel time</dt><dd>${travelTime(state, f.id, s.id)} month(s)</dd></div><div><dt>Defensive patrol</dt><dd>${s.prepared ? "Prepared: +15 shields" : "Not prepared"}</dd></div></dl>
  ${
    f.assignment
-     ? `<div class="notice">${escape(f.name)} is on assignment to ${escape(state.sectors.find((x) => x.id === f.assignment.destination).name)}. ${f.assignment.remaining} month(s) remain. Advance time from Command overview.</div>`
+     ? `<div class="notice">${escape(f.name)} is on assignment to ${escape(sectorLabel(state, state.sectors.find((x) => x.id === f.assignment.destination)))}. ${f.assignment.remaining} month(s) remain. Advance time from Command overview.</div>`
      : `<label class="form-label" for="assignment-kind">Fleet assignment</label><select id="assignment-kind">${Object.entries(
          ASSIGNMENTS,
        )
@@ -214,6 +219,7 @@ function galaxy() {
          )}</select><p class="cost" id="assignment-description">${ASSIGNMENTS[s.surveyed ? "move" : "scout"].description}</p>${button("Dispatch fleet", "dispatch", "primary", `data-id="${s.id}"`)}${here && !s.surveyed ? button("Survey here · 20 energy", "survey", "secondary", `data-id="${s.id}"`) : ""}`
  }
  ${s.threat ? button("Respond to distress signal", "battle", "danger", `data-id="${s.id}" ${!here ? 'disabled title="Move or scout here first; wait for arrival"' : ""}`) : ""}<p class="cost">Live combat requires your active fleet to be present. ${s.surveyed ? "Survey data archived." : "Scouting earns 18 research + 10 alloys; science ships add 12 research."}</p></section></div>
+ ${siteActions(s, here)}
  <section class="panel assignment-guide"><h2>What should this fleet do?</h2>${Object.values(
    ASSIGNMENTS,
  )
@@ -229,7 +235,7 @@ function fleet() {
     role = ROLES[commissionRole];
   return `${heading("STARSHIP OPERATIONS", "Your people. Your fleet.", "Name your vessels, choose their roles, and organize up to three independent fleets.", button("Create fleet", "newFleet", "secondary", state.taskForces.length >= 3 ? "disabled" : ""))}${fleetSelector()}
  <section class="panel fleet-management"><div><div class="eyebrow">${escape(f.designation)}</div><h2>${escape(f.name)}</h2><p>${vessels.length} / 5 vessels · ${f.assignment ? "On assignment" : "Standing by"} · ${escape(state.sectors.find((x) => x.id === f.location).name)}</p></div><div class="action-row">${button("Edit fleet identity", "editFleet", "secondary", `data-id="${f.id}"`)}${button("Repair this fleet · 20 alloys", "repairFleet", "secondary", f.assignment ? "disabled" : "")}</div></section>
- <div class="ship-grid">${vessels.map((v) => `<section class="panel vessel-card"><div class="panel-heading"><span class="eyebrow">${escape(v.registry)}</span><span class="tag">${ROLES[v.role].name}</span></div><div class="vessel-illustration">${shipArt()}</div><h2>${escape(v.name)}</h2><p>${ROLES[v.role].description}</p><div class="ship-stat"><span>Hull integrity</span><strong>${v.hull} / ${v.maxHull}</strong></div>${meter(v.hull, v.maxHull)}<div class="ship-stat"><span>Shields</span><strong>${v.shields} / ${v.maxShields}</strong></div>${meter(v.shields, v.maxShields, "blue-meter")}<div class="vessel-footer">${icon("target")} Weapon output <strong>${v.damage + (state.faction === "klingon" ? 4 : 0)}</strong></div><div class="ship-customization">${button("Edit name & registry", "editShip", "secondary", `data-id="${v.id}"`)}<label class="form-label" for="transfer-${v.id}">Fleet assignment</label><select id="transfer-${v.id}" data-transfer="${v.id}">${state.taskForces.map((g) => `<option value="${g.id}" ${g.id === v.fleetId ? "selected" : ""}>${escape(g.name)}</option>`).join("")}</select></div></section>`).join("")}
+ ${shipComparison()}<div class="ship-grid">${vessels.map((v) => `<section class="panel vessel-card"><div class="panel-heading"><span class="eyebrow">${escape(v.registry)}</span><span class="tag">${escape(v.cls)}</span></div><div class="vessel-illustration">${shipArt()}</div><h2>${escape(v.name)}</h2><p>${ROLES[v.role].description}</p><div class="ship-stat"><span>Hull integrity</span><strong>${v.hull} / ${v.maxHull}</strong></div>${meter(v.hull, v.maxHull)}<div class="ship-stat"><span>Shields</span><strong>${v.shields} / ${v.maxShields}</strong></div>${meter(v.shields, v.maxShields, "blue-meter")}<div class="vessel-footer">${icon("target")} Weapon output <strong>${v.damage + (state.faction === "klingon" ? 4 : 0)}</strong></div><div class="ship-customization">${button("Edit name & registry", "editShip", "secondary", `data-id="${v.id}"`)}<label class="form-label" for="transfer-${v.id}">Fleet assignment</label><select id="transfer-${v.id}" data-transfer="${v.id}">${state.taskForces.map((g) => `<option value="${g.id}" ${g.id === v.fleetId ? "selected" : ""}>${escape(g.name)}</option>`).join("")}</select></div></section>`).join("")}
  <section class="panel commission-card">${icon("plus")}<h2>A role for every vessel.</h2><label class="form-label" for="commission-role">Vessel design</label><select id="commission-role">${Object.entries(
    ROLES,
  )
@@ -242,9 +248,10 @@ function fleet() {
    )}</select><p>${role.description}</p><span>${state.fleet.length} / 12 TOTAL COMMAND CAPACITY</span>${button("Commission vessel", "commission", "primary", vessels.length >= 5 || state.fleet.length >= 12 || f.assignment ? "disabled" : "")}<p class="cost">${role.cost.alloys} alloys + ${role.cost.energy} energy</p></section></div><p class="cost">Transfers require both fleets to be idle in the same system. Ship identities and registries remain attached to the vessel through transfers, combat, and saves.</p>`;
 }
 function diplomacyView() {
-  return `${heading("INTERSTELLAR RELATIONS", "No enemies are inevitable.", "Build trust, trade, form alliances—or choose confrontation. Every power is a possible partner.")}<div class="diplomacy-grid">${Object.entries(
+  return `${heading("INTERSTELLAR RELATIONS", "No enemies are inevitable.", "Build trust, trade, form alliances—or choose confrontation. Every contacted power is a possible partner. Discover others by visiting unidentified systems or receiving visitors.")}<div class="diplomacy-grid">${Object.entries(
     state.relations,
   )
+    .filter(([id]) => state.contacts.includes(id))
     .map(([id, r]) => {
       const p = POWERS[id];
       return `<section class="panel contact-card"><div class="contact-heading"><div class="contact-mark" style="--contact-color:${p.color}">${p.mark}</div><div><h2>${p.name}</h2><p>${p.style}</p></div><span class="tag ${r.status === "war" ? "red" : r.status === "allied" ? "green" : ""}">${r.status === "allied" ? "ALLIED" : r.status === "war" ? "AT WAR" : "NEUTRAL"}</span></div><div class="relationship-label"><span>Diplomatic relations</span><strong>${r.score > 0 ? "+" : ""}${r.score} <small>/ 100</small></strong></div><div class="relation-track"><span style="left:${(r.score + 100) / 2}%"></span></div><div class="relation-scale"><span>HOSTILE</span><span>CORDIAL</span><span>TRUSTED</span></div><div class="contact-actions">${r.status === "war" ? `${button("Negotiate peace · 30 influence", "diplomacy", "secondary", `data-id="${id}" data-kind="peace"`)}${button("Engage patrol", "battle", "danger", `data-opponent="${id}" data-id="rim" ${activeFleet(state).location !== "rim" || activeFleet(state).assignment ? 'disabled title="Move your active fleet to the Azure Reach first"' : ""}`)}` : `${button(`Send envoy · ${state.faction === "earth" ? 10 : 15} influence`, "diplomacy", "secondary", `data-id="${id}" data-kind="envoy" ${r.lastEnvoy === state.turn ? 'disabled title="One envoy per power per month"' : ""}`)}${button(r.trade ? "Trade active · +5 energy/mo" : "Trade pact · 25 energy", "diplomacy", "secondary", `data-id="${id}" data-kind="trade" ${r.trade || r.score < 10 ? 'disabled title="Requires +10 relations"' : ""}`)}${button(r.status === "allied" ? "Leave alliance" : "Form alliance · 25 influence", "diplomacy", r.status === "allied" ? "secondary" : "primary", `data-id="${id}" data-kind="${r.status === "allied" ? "leave" : "alliance"}" ${r.status !== "allied" && r.score < 35 ? 'disabled title="Requires +35 relations"' : ""}`)}${button("Declare war", "declare", "quiet-danger", `data-id="${id}"`)}`}</div>${diplomaticDetails(id, r)}<div class="contact-note">${r.status === "allied" ? "Your ally contributes +2 influence each month." : r.status === "war" ? "Trade is suspended. A ceasefire remains possible." : "Trade requires +10 relations. Alliance requires +35."}</div></section>`;
@@ -257,7 +264,7 @@ function research() {
   )
     .map(
       ([id, t]) =>
-        `<section class="panel research-card"><div class="research-icon">${icon(id === "shields" ? "shield" : id === "weapons" ? "target" : "compass")}</div><span class="eyebrow">${id === "logistics" ? "OPERATIONS" : "STARSHIP SYSTEMS"}</span><h2>${t.name}</h2><p>${t.description}</p>${button(state.tech.includes(id) ? icon("check") + " Research complete" : `Research · ${t.cost} data`, "develop", state.tech.includes(id) ? "secondary" : "primary", `data-kind="${id}" ${state.tech.includes(id) ? "disabled" : ""}`)}</section>`,
+        `<section class="panel research-card"><div class="research-icon">${icon(id === "shields" ? "shield" : id === "weapons" ? "target" : "compass")}</div><span class="eyebrow">${id === "logistics" ? "OPERATIONS" : "STARSHIP SYSTEMS"}</span><h2>${t.name}</h2><p>${t.description}</p>${button(state.tech.includes(id) ? icon("check") + " Research complete" : !techAvailable(state,id) ? "Discovery required" : `Research · ${t.cost} data`, "develop", state.tech.includes(id) ? "secondary" : "primary", `data-kind="${id}" ${state.tech.includes(id) || !techAvailable(state,id) ? "disabled" : ""}`)}</section>`,
     )
     .join(
       "",
@@ -408,7 +415,11 @@ app.addEventListener("click", (e) => {
       render();
       return;
     } else if (action === "decision") message = decision(state, Number(index));
-    else if (action === "advance") message = advance(state);
+    else if (action === "advance") message = advanceMonths(state, Number(document.querySelector("#month-count")?.value || 1));
+    else if (action === "monthly") message = resolveMonthlyEvent(state, Number(index));
+    else if (action === "project") message = completeProject(state, id);
+    else if (action === "deployAway") { message = startAway(state, id); view = "away"; }
+    else if (action === "away") message = awayAction(state, kind, Number(index));
     else if (action === "survey") message = survey(state, id);
     else if (action === "diplomacy") message = diplomacy(state, id, kind);
     else if (action === "confirmWar") {
@@ -445,6 +456,9 @@ app.addEventListener("change", async (e) => {
     if (e.target.id === "import-file") {
       await previewImport(e.target.files[0]);
       return;
+    }
+    if (e.target.id === "month-count") {
+      monthsToAdvance = Number(e.target.value); render(); return;
     }
     if (e.target.id === "commission-role") {
       commissionRole = e.target.value;
@@ -513,6 +527,10 @@ app.addEventListener("submit", (e) => {
   }
 });
 document.addEventListener("keydown", (e) => {
+  if (view === "away" && state.away && !modal && !e.repeat && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) {
+    const action = { w: "forward", s: "back", a: "left", d: "right", ArrowUp: "forward", ArrowDown: "back", ArrowLeft: "left", ArrowRight: "right" }[e.key];
+    if (action) { e.preventDefault(); try { awayAction(state, action); persist(); render(); } catch (err) { toast(err.message); } }
+  }
   if (e.key === "Escape" && modal) {
     modal = null;
     render();
@@ -564,8 +582,8 @@ function missionsView() {
   }`;
 }
 function helpView() {
-  return `${heading("ACADEMY & CAMPAIGN FILES", "A little guidance. A galaxy of possibilities.", "Learn at your own pace, and keep your campaign between releases.")}<div class="help-grid"><section class="panel help-card"><div class="eyebrow">START HERE</div><h2>Your first five orders</h2><ol>${TUTORIAL_STEPS.map((t) => `<li><strong>${t.title.replace(/^\d\. /, "")}</strong><p>${t.text}</p></li>`).join("")}</ol><div class="action-row">${button("Replay guided tutorial", "tutorial", "primary", 'data-kind="replay"')}${button("Skip tutorial", "tutorial", "secondary", 'data-kind="skip"')}</div><p class="cost">This guide uses your current campaign. Completed milestones are remembered. Replay resets the checklist without resetting your progress.</p></section>
- <section class="panel help-card"><div class="eyebrow">YOUR CAMPAIGN, YOUR FILE</div><h2>Save, export, and continue.</h2><p>Autosave belongs to this browser and file location. Export a campaign before moving the game, switching computers, or installing a new release.</p>${button("Export campaign (.json)", "export", "primary")}<label class="form-label" for="import-file">Import a saved campaign</label><input id="import-file" type="file" accept=".json,application/json"><p class="cost">Import previews the faction and month before replacing your campaign. Original v0.1 saves are upgraded automatically. Invalid files leave your current campaign intact.</p><div class="notice">Browser saves do not automatically transfer between downloaded HTML files. Export here, open the new game, and import the JSON file.</div><h2 class="help-subheading">How each resource works</h2><dl class="resource-guide"><dt>Energy</dt><dd>Travel, surveys, construction, and trade.</dd><dt>Alloys</dt><dd>New vessels, repairs, and relief supplies.</dd><dt>Research</dt><dd>Technology that improves your economy and fleet.</dd><dt>Influence</dt><dd>Envoys, treaties, alliances, and peace negotiations.</dd></dl><p class="cost">Version ${GAME_VERSION} · Save format 2 · Native desktop builds and a mod manager remain future milestones.</p></section></div>`;
+  return `${heading("ACADEMY & CAMPAIGN FILES", "A little guidance. A galaxy of possibilities.", "Learn at your own pace, and keep your campaign between releases.")}<section class="panel assignment-guide"><h2>Your expanded frontier</h2><p><strong>Explore:</strong> the star chart lists 18 destinations. Scout new systems for research leads, away sites, and one-time field projects. Unidentified civilization signals reveal names and diplomacy when a fleet arrives. Origin delegations also visit your home.</p><p><strong>Away team:</strong> survey one of the six marked sites, stay in orbit, and deploy for 10 energy. Walk with W/A/S/D or the buttons, use the scanner map to approach a numbered object, scan it, then choose preservation or recovery. Recall safely at any time; completed objectives persist.</p><p><strong>Time:</strong> choose 1, 3, 6, or 12 months on Command overview. Time stops for council and monthly decisions, first contact, fleet arrivals, mission results, and new diplomatic requests. Resolve the priority transmission before continuing.</p><p><strong>Compare ships:</strong> Fleet command lists every design alongside your actual vessels, including current research bonuses and commission costs.</p></section><div class="help-grid"><section class="panel help-card"><div class="eyebrow">START HERE</div><h2>Your first five orders</h2><ol>${TUTORIAL_STEPS.map((t) => `<li><strong>${t.title.replace(/^\d\. /, "")}</strong><p>${t.text}</p></li>`).join("")}</ol><div class="action-row">${button("Replay guided tutorial", "tutorial", "primary", 'data-kind="replay"')}${button("Skip tutorial", "tutorial", "secondary", 'data-kind="skip"')}</div><p class="cost">This guide uses your current campaign. Completed milestones are remembered. Replay resets the checklist without resetting your progress.</p></section>
+ <section class="panel help-card"><div class="eyebrow">YOUR CAMPAIGN, YOUR FILE</div><h2>Save, export, and continue.</h2><p>Autosave belongs to this browser and file location. Export a campaign before moving the game, switching computers, or installing a new release.</p>${button("Export campaign (.json)", "export", "primary")}<label class="form-label" for="import-file">Import a saved campaign</label><input id="import-file" type="file" accept=".json,application/json"><p class="cost">Import previews the faction and month before replacing your campaign. Original v0.1 and v0.2 saves are upgraded automatically. Invalid files leave your current campaign intact.</p><div class="notice">Browser saves do not automatically transfer between downloaded HTML files. Export here, open the new game, and import the JSON file.</div><h2 class="help-subheading">How each resource works</h2><dl class="resource-guide"><dt>Energy</dt><dd>Travel, surveys, construction, and trade.</dd><dt>Alloys</dt><dd>New vessels, repairs, and relief supplies.</dd><dt>Research</dt><dd>Technology that improves your economy and fleet.</dd><dt>Influence</dt><dd>Envoys, treaties, alliances, and peace negotiations.</dd></dl><p class="cost">Version ${GAME_VERSION} · Save format ${SAVE_VERSION} · Native desktop builds and a mod manager remain future milestones.</p></section></div>`;
 }
 function extendedModal() {
   if (["ship", "fleet", "createFleet"].includes(modal.type)) {
@@ -641,7 +659,7 @@ function handleExtendedAction(action, data) {
     if (modal?.type !== "import") return true;
     state = modal.candidate;
     modal = null;
-    view = state.battle ? "tactical" : "overview";
+    view = state.battle ? "tactical" : state.away ? "away" : "overview";
     sectorId = state.location;
     message = "Campaign imported successfully.";
   } else if (action === "selectFleet") {
@@ -681,4 +699,49 @@ function handleExtendedAction(action, data) {
   render();
   if (message) toast(message);
   return true;
+}
+
+function timeControls() {
+  const blocked = state.battle || state.away || state.monthlyEvent || (currentEvent(state) && !state.eventResolved);
+  return `<div class="time-controls"><label for="month-count">Advance time</label><select id="month-count">${[1,3,6,12].map(n=>`<option value="${n}" ${n===monthsToAdvance?"selected":""}>${n} month${n===1?"":"s"}</option>`).join("")}</select>${button((monthsToAdvance===1 ? "Next month " : `Advance ${monthsToAdvance} months `) + icon("arrow"), "advance", "primary", blocked ? 'disabled title="Resolve pending decisions or recall your away team first"' : "")}<small>${date()} · month ${state.turn}</small></div>`;
+}
+function priorityTransmission() {
+  const e = state.monthlyEvent && MONTHLY_EVENTS[state.monthlyEvent.id];
+  if (!e) return "";
+  return `<section class="panel priority-transmission" aria-label="Monthly event"><div class="eyebrow">PRIORITY TRANSMISSION · MONTH ${state.monthlyEvent.turn}</div><h2>${e.title}</h2><p>${e.body}</p><div class="action-row">${e.choices.map((c,i) => button(`${c.label}<small>${c.effect}</small>`, "monthly", "secondary", `data-index="${i}" ${state.battle ? "disabled" : ""}`)).join("")}</div></section>`;
+}
+function siteActions(s, here) {
+  if (!s.site && !s.project && !s.tech) return "";
+  const completed = state.awayHistory[s.id]?.length === 3;
+  return `<section class="panel assignment-guide site-briefing"><div class="eyebrow">EXPLORATION OPPORTUNITIES</div><h2>${s.site ? AWAY_SITES[s.site].title : "A reason to stay"}</h2><p>${!s.surveyed ? "Scout this system to identify its discoveries and activities." : s.site ? AWAY_SITES[s.site].intro : "Complete a field project while your fleet is in this system."}</p>${s.tech ? `<p><strong>Research lead:</strong> ${TECH[s.tech].name} · ${TECH[s.tech].away ? "Complete all away objectives" : "Survey the system"} to unlock.</p>` : ""}${s.site ? button(completed ? "Away mission complete" : state.away?.sectorId === s.id ? "Return to away team" : "Deploy away team · 10 energy", state.away?.sectorId === s.id ? "nav" : "deployAway", "primary", `data-id="${s.id}" data-view="away" ${!here || !s.surveyed || completed ? "disabled" : ""}`) : ""}${s.project ? button(state.projects.includes(s.id) ? "Field project complete" : `Field project · 15 energy → 40 ${s.project}`, "project", "primary", `data-id="${s.id}" ${!here || !s.surveyed || state.projects.includes(s.id) ? "disabled" : ""}`) : ""}</section>`;
+}
+function shipComparison() {
+  return `<section class="panel comparison-panel"><div class="panel-heading"><h2>Ship comparison</h2><span class="tag">CURRENT RESEARCH INCLUDED</span></div><div class="table-scroll" tabindex="0" role="region" aria-label="Ship designs and fleet statistics"><table><caption>Available designs and every vessel under your command. Hull and shields show capacity; owned ships also show current condition.</caption><thead><tr><th scope="col">Vessel / design</th><th scope="col">Hull</th><th scope="col">Shields</th><th scope="col">Weapons</th><th scope="col">Commission cost</th><th scope="col">Role advantage</th></tr></thead><tbody>${Object.entries(ROLES).map(([id,r]) => { const stats=designStats(state,id); return `<tr class="design-row"><th scope="row">${r.name}<small>AVAILABLE DESIGN · ${state.fleet.filter(v=>v.role===id).length} owned</small></th><td>${stats.hull}</td><td>${stats.shields}</td><td>${stats.damage}</td><td>${r.cost.alloys} alloys<br>${r.cost.energy} energy</td><td>${r.description}</td></tr>`; }).join("")}${state.fleet.map(v=>`<tr><th scope="row">${escape(v.name)}<small>${escape(v.registry)} · ${escape(state.taskForces.find(f=>f.id===v.fleetId).name)}</small></th><td>${v.hull} / ${v.maxHull}</td><td>${v.shields} / ${v.maxShields}</td><td>${v.damage+(state.faction==="klingon"?4:0)}</td><td>In service</td><td>${escape(v.cls)}</td></tr>`).join("")}</tbody></table></div></section>`;
+}
+function awayScene() {
+  const a=state.away, site=AWAY_SITES[state.sectors.find(x=>x.id===a.sectorId).site];
+  const angle=a.direction*Math.PI/2-Math.PI/2, fov=Math.PI/2.6, columns=100, width=900, height=480;
+  const walls=[];
+  for(let i=0;i<columns;i++) {
+    const ray=angle+(i/(columns-1)-0.5)*fov;
+    let d=0.02;
+    while(d<14 && AWAY_LAYOUT[Math.floor(a.y+0.5+Math.sin(ray)*d)]?.[Math.floor(a.x+0.5+Math.cos(ray)*d)]!=="#") d+=0.025;
+    const corrected=d*Math.cos(ray-angle), h=Math.min(height*2, height/Math.max(0.1,corrected));
+    walls.push(`<rect x="${i*width/columns}" y="${(height-h)/2}" width="${width/columns}" height="${h}" fill="${site.color}" opacity="${Math.max(.12,.65-d*.06)}"/><path d="M${i*width/columns} ${(height-h)/2+h*.8}h${width/columns}" stroke="${site.color}" stroke-width="3"/>`);
+  }
+  const objects=AWAY_OBJECT_POSITIONS.map((p,i)=>({ ...p,i,d:Math.hypot(p.x-a.x,p.y-a.y) })).sort((x,y)=>y.d-x.d).map(p=>{
+    if(a.resolved.includes(p.i) || p.d<.1) return "";
+    let relative=Math.atan2(p.y-a.y,p.x-a.x)-angle;
+    relative=Math.atan2(Math.sin(relative),Math.cos(relative));
+    if(Math.abs(relative)>fov*.55) return "";
+    for(let t=.1;t<p.d;t+=.1) if(AWAY_LAYOUT[Math.floor(a.y+.5+(p.y-a.y)*t/p.d)]?.[Math.floor(a.x+.5+(p.x-a.x)*t/p.d)]==="#") return "";
+    const x=width/2+Math.tan(relative)/Math.tan(fov/2)*width/2, scale=Math.min(150,150/p.d);
+    return `<g transform="translate(${x},${height/2+scale*.5})"><path d="M${-scale/2} 0v${-scale}l${scale/2} ${-scale*.3} ${scale/2} ${scale*.3}v${scale}z" fill="#11151e" stroke="${site.color}" stroke-width="3"/><rect x="${-scale*.35}" y="${-scale*.8}" width="${scale*.7}" height="${scale*.4}" fill="${site.color}"/><text text-anchor="middle" y="${-scale*.49}" fill="#07070a" font-size="${Math.max(12,scale*.27)}">${p.i+1}</text></g>`;
+  }).join("");
+  return `<svg class="away-scene" viewBox="0 0 900 480" role="img" aria-label="First-person view of ${site.title}, facing ${["north","east","south","west"][a.direction]} at grid ${a.x}, ${a.y}"><defs><linearGradient id="away-floor" x2="0" y2="1"><stop stop-color="#090b12"/><stop offset="1" stop-color="#303039"/></linearGradient></defs><rect width="900" height="480" fill="#05070d"/><rect y="240" width="900" height="240" fill="url(#away-floor)"/>${walls.join("")}${objects}<path d="M438 240h24m-12-12v24" stroke="white" opacity=".55"/><text x="24" y="35" fill="${site.color}" font-size="18" font-family="monospace">VISUAL FEED // ${["NORTH","EAST","SOUTH","WEST"][a.direction]}</text><text x="24" y="455" fill="white" font-size="15" font-family="monospace">TEAM TELEMETRY NOMINAL · ${a.resolved.length}/3 OBJECTIVES</text></svg>`;
+}
+function awayView() {
+  if (!state.away) return `${heading("SURFACE OPERATIONS", "Step into the unknown.", "Explore from the perspective of your away team.")}<section class="panel empty-state"><h2>Your team is standing by.</h2><p>Survey a site, leave your fleet in orbit, then deploy from its star-chart briefing. Each site has three objects to scan and resolve. Completed objectives survive recall.</p><div class="away-site-list">${state.sectors.filter(s=>s.site).map(s=>`<button class="button secondary" data-action="sector" data-id="${s.id}">${s.name}<small>${state.awayHistory[s.id]?.length || 0}/3 objectives · ${s.surveyed ? "surveyed" : "survey required"}</small></button>`).join("")}</div></section>`;
+  const a=state.away, sector=state.sectors.find(s=>s.id===a.sectorId), site=AWAY_SITES[sector.site], near=awayNear(state);
+  return `${heading("AWAY TEAM · " + sector.name.toUpperCase(), site.title, "W / ↑ forward · S / ↓ back · A / ← turn left · D / → turn right", button("Recall away team", "away", "secondary", 'data-kind="recall"'))}<div class="away-layout"><section class="panel away-viewport">${awayScene()}<div class="away-controls">${button("Turn left", "away", "secondary", 'data-kind="left"')}${button("Move forward", "away", "primary", 'data-kind="forward"')}${button("Turn right", "away", "secondary", 'data-kind="right"')}${button("Move back", "away", "secondary", 'data-kind="back"')}</div><p class="away-message" role="status">${escape(a.message)}</p></section><section class="panel scanner-panel"><div class="eyebrow">TRICORDER · LOCAL SCAN</div><div class="scanner-map" aria-label="Local floor plan; numbered objectives">${AWAY_LAYOUT.map((row,y)=>[...row].map((cell,x)=>{ const obj=AWAY_OBJECT_POSITIONS.findIndex(p=>p.x===x&&p.y===y); return `<span class="${cell==="#"?"wall":"floor"} ${a.x===x&&a.y===y?"player":""}">${a.x===x&&a.y===y ? ["↑","→","↓","←"][a.direction] : obj>=0 ? a.resolved.includes(obj) ? "✓" : obj+1 : ""}</span>`; }).join("")).join("")}</div><p>Move next to a numbered object to scan it. Your arrow shows your position and heading.</p><ol>${site.objects.map((name,i)=>`<li>${name} ${a.resolved.includes(i)?"✓":""}</li>`).join("")}</ol><div class="nearby-objects">${near.filter(p=>!a.resolved.includes(p.i)).map(p=>`<div class="nearby-object"><h3>${site.objects[p.i]}</h3>${button("Scan object", "away", "secondary", `data-kind="scan" data-index="${p.i}"`)}${a.scanned.includes(p.i) ? `<p>${site.scans[p.i]}</p>${button("Preserve & study · +18 research, +5 influence", "away", "primary", `data-kind="study" data-index="${p.i}"`)}${button("Recover materials · +15 alloys", "away", "secondary", `data-kind="salvage" data-index="${p.i}"`)}` : ""}</div>`).join("") || `<p>${a.resolved.length===3 ? "All objectives complete. Recall your team to resume the campaign." : "No unresolved object within reach. Follow your scanner."}</p>`}</div></section></div>`;
 }

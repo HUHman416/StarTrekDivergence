@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   activeFleet,
   createGame,
+  meetPower, resolveMonthlyEvent,
   currentEvent,
   decision,
   advance,
@@ -55,18 +56,23 @@ test("month progression requires a resolved decision and pays actual production"
 test("Klingons and Romulans can become founding allies of a Federation", () => {
   const s = createGame();
   s.resources.influence = 1000;
+  meetPower(s, "klingon", "Test visitor");
+  meetPower(s, "romulan", "Test visitor");
   for (let i = 0; i < 6; i++) {
     if (i < 3)
       for (const id of ["klingon", "romulan"]) diplomacy(s, id, "envoy");
     if (i === 2)
       for (const id of ["klingon", "romulan"]) diplomacy(s, id, "alliance");
     decision(s, 0);
+    if (s.monthlyEvent) resolveMonthlyEvent(s, 1);
     if (i < 5) advance(s);
   }
   assert.equal(s.completed, true);
   assert.equal(s.charter, "Federation of Allied Worlds");
   assert.deepEqual(s.founders, ["Klingon Houses", "Romulan Star Empire"]);
+  if (s.monthlyEvent) resolveMonthlyEvent(s, 1);
   advance(s);
+  if (s.monthlyEvent) resolveMonthlyEvent(s, 1);
   advance(s);
   assert.equal(s.turn, 8);
 });
@@ -78,7 +84,8 @@ test("alternate founding charters remain possible without mandatory allies", () 
     const s = createGame();
     for (let i = 0; i < 6; i++) {
       decision(s, choice);
-      if (i < 5) advance(s);
+      if (s.monthlyEvent) resolveMonthlyEvent(s, 1);
+    if (i < 5) advance(s);
     }
     assert.equal(s.charter, title);
     assert.deepEqual(s.founders, []);
@@ -103,7 +110,7 @@ test("unaffordable purchases and invalid diplomatic actions leave state unchange
   const before = JSON.stringify(s);
   assert.throws(() => commission(s), /energy/);
   assert.equal(JSON.stringify(s), before);
-  assert.throws(() => diplomacy(s, "klingon", "alliance"), /requires/);
+  assert.throws(() => diplomacy(s, "klingon", "alliance"), /First contact/);
   assert.equal(JSON.stringify(s), before);
 });
 test("surveys cost energy once and grant research and material rewards", () => {

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   createGame,
+  meetPower, resolveMonthlyEvent, SAVE_VERSION,
   currentEvent,
   decision,
   advance,
@@ -33,11 +34,13 @@ import {
   repairFleet,
 } from "../src/game.js";
 const month = (s) => {
+  if (s.monthlyEvent) resolveMonthlyEvent(s, 1);
   if (currentEvent(s) && !s.eventResolved) decision(s, 0);
   advance(s);
 };
 function rich() {
   const s = createGame();
+  Object.keys(s.relations).forEach(id => meetPower(s, id, "Test visitor"));
   Object.keys(s.resources).forEach((k) => (s.resources[k] = 1000));
   return s;
 }
@@ -194,6 +197,7 @@ test("unaffordable mission choices leave mission, queue, and resources intact", 
 });
 test("counteroffers require explicit acceptance and enforce their full cost", () => {
   const s = createGame();
+  meetPower(s, "romulan", "Test visitor");
   proposeTreaty(s, "romulan", "borders");
   assert.equal(s.relations.romulan.borders, false);
   assert.equal(s.resources.influence, 60);
@@ -308,7 +312,7 @@ test("v0.1 imports retain progress and identifiers and gain defaults for new fea
   legacy.resources.energy = 42;
   const migrated = restoreSave(JSON.stringify(legacy));
   assert.ok(migrated);
-  assert.equal(migrated.version, 2);
+  assert.equal(migrated.version, SAVE_VERSION);
   assert.equal(migrated.resources.energy, 42);
   assert.equal(migrated.fleet[0].id, "flagship");
   assert.equal(migrated.fleet[0].registry, "NX-01");
