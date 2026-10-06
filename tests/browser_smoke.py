@@ -44,12 +44,12 @@ with sync_playwright() as p:
     assert saved()['taskForces'][0]['location'] == 'tellar'
     assert '4. Make a friend' in page.locator('.tutorial-banner').inner_text()
     action('tutorialGo')
-    action('diplomacy', id='andorian', kind='envoy')
+    action('diplomacy', id='tellarite', kind='envoy')
     assert '5. Take the bridge' in page.locator('.tutorial-banner').inner_text()
-    action('treaty', id='andorian', kind='borders')
-    assert saved()['relations']['andorian']['proposal'] is not None
-    action('answerProposal', id='andorian', kind='accept')
-    assert saved()['relations']['andorian']['borders'] is True
+    action('treaty', id='tellarite', kind='borders')
+    assert saved()['relations']['tellarite']['proposal'] is not None
+    action('answerProposal', id='tellarite', kind='accept')
+    assert saved()['relations']['tellarite']['borders'] is True
     action('answerRequest', id='vulcan', kind='accept')
     action('favor', id='vulcan')
     action('declare', id='vulcan')
