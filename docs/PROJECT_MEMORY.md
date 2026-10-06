@@ -68,7 +68,7 @@ Native Linux/Windows builds and the later mod manager remain deferred according 
 - Consider mod profiles, rollback, missing-mod handling, and saves that record their active mod set.
 - Workshop/store integration, distribution channels, scripting APIs, and multiplayer are **not decided**.
 
-## v0.2 implementation and release preparation
+## v0.2 implementation and published release
 
 - Editable ship names/unique registries and fleet names/unique designations, with stable internal identities.
 - Optional five-step tutorial with contextual instructions, skip/replay controls, and recorded progress.
@@ -80,9 +80,11 @@ Native Linux/Windows builds and the later mod manager remain deferred according 
 - Explorer, cruiser, science, and support roles; science survey bonuses and support escort/repair bonuses.
 - Root README redesigned with the exact requested attribution, screenshots, play instructions, save continuity, scope, roadmap, and development guide.
 - Release artifacts: standalone HTML, optional quick-start ZIP, and SHA-256 checksums. Native installers and mods are not part of this release.
-- Validation: 42 simulation tests and a full Chromium walkthrough passed. The save importer was corrected to preserve the full 32-bit RNG state. The packaged HTML also passed offline gameplay and no-external-asset checks. Publication is tracked in the active task; do not infer publication from artifact creation.
+- Validation: 42 simulation tests and a full Chromium walkthrough passed. The save importer was corrected to preserve the full 32-bit RNG state. The packaged HTML also passed offline gameplay and no-external-asset checks. Published release assets were downloaded again: their SHA-256 checksums matched, the HTML matched the locally tested build, and ZIP integrity/content checks passed.
 - Existing GitHub release inspected: tag `Alpha`, title `Star Trek Divergence v0.1`, one HTML asset, and the opening instruction “Simply download the HTML file, and double click it, or drag and drop it into any browser to play it!”
-- Next release: `Alpha-v0.2`, title `Star Trek Divergence v0.2`. Preserve `Alpha`. GitHub workflow validates source and packaged artifacts before publishing tagged versions.
+- Published release: [`Alpha-v0.2` — Star Trek Divergence v0.2](https://github.com/HUHman416/StarTrekDivergence/releases/tag/Alpha-v0.2), source commit `cd0c332c28ce656db093a68274a34bc63871ea46`. The original `Alpha` release is preserved.
+- GitHub [release workflow 37401966367](https://github.com/HUHman416/StarTrekDivergence/actions/runs/37401966367) passed validation and publication. A Node 22 test-runner flag incompatibility was fixed before publication; the test command now passes on Node 22 and Node 24.
+- Downloadable assets: `StarTrekDivergence-v0.2.html`, `StarTrekDivergence-v0.2.zip`, and `SHA256SUMS.txt`. No native executable is included.
 
 ## Implemented baseline
 
@@ -121,3 +123,5 @@ Run `npm run dev` from the repository; the server listens on port 5173. See READ
 
 - 2026-10-06: User approved all proposed gameplay additions and explicitly requested a new GitHub release matching their existing naming style.
 - 2026-10-06: User requested that the existing GitHub README be polished and credit ChatGPT for the complete implementation, with concepts and ideas attributed to HUHman at the very top; explicitly clarified not to create a separate README.
+
+- 2026-10-06: Published v0.2 on GitHub after passing 42 tests, browser and packaged-game checks, and CI. Verified the published downloads and recorded the release link above.
