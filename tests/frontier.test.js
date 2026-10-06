@@ -30,8 +30,8 @@ function walkTo(s,target) {
 test("fresh campaigns hide unknown civilizations and forbid premature diplomacy",()=>{
   const s=createGame(); assert.equal(s.sectors.length,18); assert.deepEqual(s.contacts,["vulcan"]);
   const q=s.sectors.find(x=>x.id==="qonos"); assert.match(sectorLabel(s,q),/Unknown/);
-  const before=exportSave(s); assert.throws(()=>diplomacy(s,"klingon","envoy"),/First contact/);
-  assert.throws(()=>proposeTreaty(s,"romulan","borders"),/First contact/); assert.equal(exportSave(s),before);
+  const before=JSON.stringify(s); assert.throws(()=>diplomacy(s,"klingon","envoy"),/First contact/);
+  assert.throws(()=>proposeTreaty(s,"romulan","borders"),/First contact/); assert.equal(JSON.stringify(s),before);
   visit(s,"qonos"); assert.ok(s.contacts.includes("klingon")); assert.equal(sectorLabel(s,q),"Qo’noS");
   assert.equal(s.relations.klingon.status,"neutral");
 });
@@ -42,9 +42,9 @@ test("physical home-system visitors open channels once without dictating allianc
   assert.equal(s.relations.andorian.status,"neutral");
 });
 test("exploration research unlocks at its site, applies bonuses, and cannot be purchased early",()=>{
-  const s=rich(); const before=exportSave(s);
+  const s=rich(); const before=JSON.stringify(s);
   assert.equal(techAvailable(s,"sensors"),false); assert.throws(()=>develop(s,"sensors"),/Explore/);
-  assert.equal(exportSave(s),before); visit(s,"nebula"); develop(s,"sensors");
+  assert.equal(JSON.stringify(s),before); visit(s,"nebula"); develop(s,"sensors");
   if(s.monthlyEvent) resolveMonthlyEvent(s,1);
   const r=s.resources.research; activeFleet(s).location="pulsar"; s.location="pulsar"; survey(s,"pulsar");
   assert.equal(s.resources.research-r,33);
@@ -56,7 +56,7 @@ test("field projects require presence, have a cost, and pay once",()=>{
   const s=rich(); assert.throws(()=>completeProject(s,"pulsar")); visit(s,"pulsar");
   const r=s.resources.research,e=s.resources.energy; completeProject(s,"pulsar");
   assert.equal(s.resources.research,r+40); assert.equal(s.resources.energy,e-15);
-  const before=exportSave(s); assert.throws(()=>completeProject(s,"pulsar"),/already/); assert.equal(exportSave(s),before);
+  const before=JSON.stringify(s); assert.throws(()=>completeProject(s,"pulsar"),/already/); assert.equal(JSON.stringify(s),before);
 });
 test("all six away sites support walking, scanning, meaningful choices, saving, and one-time rewards",()=>{
   const s=rich();
@@ -81,7 +81,7 @@ test("all six away sites support walking, scanning, meaningful choices, saving, 
 });
 test("recall preserves completed objectives, boundaries block walking, redeployment cannot farm rewards",()=>{
   const s=rich(); visit(s,"haven"); startAway(s,"haven");
-  const before=exportSave(s); assert.throws(()=>awayAction(s,"back"),/bulkhead/); assert.equal(exportSave(s),before);
+  const before=JSON.stringify(s); assert.throws(()=>awayAction(s,"back"),/bulkhead/); assert.equal(JSON.stringify(s),before);
   walkTo(s,AWAY_OBJECT_POSITIONS[0]); awayAction(s,"scan",0); awayAction(s,"study",0); awayAction(s,"recall");
   startAway(s,"haven"); assert.deepEqual(s.away.resolved,[0]);
   walkTo(s,AWAY_OBJECT_POSITIONS[0]); assert.throws(()=>awayAction(s,"study",0),/already/);
@@ -101,7 +101,7 @@ test("monthly events are deterministic across save/reload, occur on monthly tick
 });
 test("monthly paid decisions validate costs atomically and do not pay twice",()=>{
   const s=createGame(); s.monthlyEvent={id:"flare",turn:1}; s.resources.alloys=0;
-  const before=exportSave(s); assert.throws(()=>resolveMonthlyEvent(s,0),/alloys/); assert.equal(exportSave(s),before);
+  const before=JSON.stringify(s); assert.throws(()=>resolveMonthlyEvent(s,0),/alloys/); assert.equal(JSON.stringify(s),before);
   resolveMonthlyEvent(s,1); assert.throws(()=>resolveMonthlyEvent(s,1),/No monthly/);
 });
 test("multi-month advancement stops for decisions, arrivals, and active away teams",()=>{
@@ -143,6 +143,6 @@ test("multi-month advancement can complete all twelve months and pays each month
 });
 test("away deployment locks its ships against transfer until recall",()=>{
   const s=rich(); visit(s,"haven"); const other=createFleet(s,"Relief","TF-02"); startAway(s,"haven");
-  const before=exportSave(s); assert.throws(()=>transferShip(s,"flagship",other),/Recall/); assert.equal(exportSave(s),before);
+  const before=JSON.stringify(s); assert.throws(()=>transferShip(s,"flagship",other),/Recall/); assert.equal(JSON.stringify(s),before);
   awayAction(s,"recall"); transferShip(s,"flagship",other); assert.ok(restoreSave(exportSave(s)));
 });
