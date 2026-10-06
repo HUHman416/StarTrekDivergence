@@ -144,3 +144,10 @@ Implemented for v0.3:
 
 - Local validation: 55 simulation tests and syntax/build checks passed. The local browser walkthrough verified first contact visibility, decision-interrupted time advance, monthly events, away deployment/movement/scanning/recall and reload restoration, ship comparisons, tactical commands, no console errors in tested flows, and all ten routes without horizontal overflow at 390/768/1440px. Full source/frontier/bundle browser scripts are wired into GitHub CI.
 - Release workflow accepts an explicit `[release]` marker on a main-branch commit as well as version tags; it creates the tag and assets only after validation and never overwrites an existing release. This supports publication through the connected GitHub app when local push credentials are unavailable.
+
+### v0.3 published and verified
+
+- Published [Star Trek Divergence v0.3 / Alpha-v0.3](https://github.com/HUHman416/StarTrekDivergence/releases/tag/Alpha-v0.3) from `cd8c17aa9452978b610abad6394ecbe4f3740ecb` after [PR #1](https://github.com/HUHman416/StarTrekDivergence/pull/1) passed. [Release workflow 37407281396](https://github.com/HUHman416/StarTrekDivergence/actions/runs/37407281396) passed all 55 simulation tests, original browser walkthrough, new frontier walkthrough, and offline bundle checks before publication.
+- Downloaded the public HTML, ZIP, and SHA256SUMS. The HTML exactly matches the locally tested game; both downloads match the published checksums, and the ZIP passes integrity checks with all extracted entries identical to the local build. Compressed ZIP bytes differ between the local and CI Python/zlib runtimes; payload contents are identical.
+- Updated repository screenshots using verified viewport captures after the full-page capture method produced an incorrectly framed image. This documentation correction does not change release gameplay.
+- The local continuation uses a `game/` checkout under the task workspace; playable files are in its ignored `dist/` folder. Local Git push credentials failed; source changes were published through the connected GitHub app, then fetched locally.
