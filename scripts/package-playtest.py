@@ -14,6 +14,9 @@ app = (root / 'src/app.js').read_text()
 game_url = data_url('text/javascript', (root / 'src/game.js').read_bytes())
 assert app.count('"./game.js"') == 1, 'Review module imports before packaging.'
 app = app.replace('"./game.js"', '"' + game_url + '"')
+fps = (root / 'src/fps.js').read_text().replace('"./game.js"', '"' + game_url + '"')
+assert app.count('"./fps.js"') == 1
+app = app.replace('"./fps.js"', '"' + data_url('text/javascript', fps.encode()) + '"')
 css = (root / 'src/styles.css').read_text()
 assert '</script' not in app.lower() and '</style' not in css.lower()
 html = html.replace('<link rel="stylesheet" href="/src/styles.css" />', '<style>\n' + css + '\n</style>')

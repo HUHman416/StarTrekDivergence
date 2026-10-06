@@ -151,3 +151,20 @@ Implemented for v0.3:
 - Downloaded the public HTML, ZIP, and SHA256SUMS. The HTML exactly matches the locally tested game; both downloads match the published checksums, and the ZIP passes integrity checks with all extracted entries identical to the local build. Compressed ZIP bytes differ between the local and CI Python/zlib runtimes; payload contents are identical.
 - Updated repository screenshots using verified viewport captures after the full-page capture method produced an incorrectly framed image. This documentation correction does not change release gameplay.
 - The local continuation uses a `game/` checkout under the task workspace; playable files are in its ignored `dist/` folder. Local Git push credentials failed; source changes were published through the connected GitHub app, then fetched locally.
+
+## v0.4: away combat and era progression (2026-10-06)
+
+User requirements: expand away teams with possible enemies and FPS mechanics; look for Star Trek/phaser models on Sketchfab; change the game theme and technology, including the carried phaser, with the era/year. The user also requested further improvement ideas.
+
+Implemented locally:
+- Dependency-free 2.5D raycast FPS with continuous WASD movement, strafing, mouse/keyboard look, collision, occluded actors, phaser hits, fire rate, cells and recharging, hostile pursuit/attacks requiring line of sight, and cover.
+- Four hostile sites; clinic and habitat remain peaceful. Unaffiliated raiders and autonomous drones avoid prescribing faction enemies. Stun is default; high power costs two charges and forceful takedowns affect ethics. Guaranteed prototype ceasefire, medical kits and always-available emergency recall preserve agency.
+- Explicit live/pause, auto-pause on navigation/blur/hidden page and restored saves, assisted paused step navigation, and on-screen movement controls. Completed objectives persist; enemies currently reset on redeployment, without kill rewards.
+- Four designer-selected era boundaries: 2151 early warp/NX instrumentation; 2245 Constitution/duotronic; 2285 refit; 2364 next generation/LCARS. Colors, panel/navigation shapes and away renderer accents follow the actual campaign year. These are game presets rather than claims of exact canon transitions.
+- Year-gated sidearm research and different weapon silhouettes, damage, capacity and fire rate. New campaigns may begin in any era with period equipment; later starts intentionally reuse the existing alternate-history origin story. No new era-specific story or ship roster is claimed.
+- Save schema 4 preserves exact position, angle, health, ammunition, reload, enemy and objective state. v0.1–v0.3 migration remains supported. Existing v0.3 away missions migrate peacefully.
+- Original code-drawn art; actual Sketchfab downloads are blocked by sign-in. Verified phaser (piiscesse, 1,106 triangles, CC BY 4.0) and Enterprise-A (MALINGA, 33,698 triangles, CC BY 4.0) in `docs/ASSET_CANDIDATES.md`. No assets downloaded/admitted. The local game-dev CLI is unavailable; canonical vendoring remains incomplete. This limitation affects external model integration, not the implemented FPS.
+
+Further ideas to discuss, not approved or implemented: named officers with science/engineering/security specialties; distinct outdoor/interior floor plans and environmental hazards; persistent crew injuries and mission consequences feeding diplomacy; varied negotiated encounters instead of the current guaranteed broadcast success; authentic era-specific ships and story chapters.
+
+Validation so far: 68 simulation tests pass; browser checks verified era selection, correct sidearm issuance, firing/cell use, pause, scanner proximity. Full regression and offline checks are pending below. Native Linux/Windows builds and mod support remain deferred.

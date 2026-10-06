@@ -146,7 +146,7 @@ with sync_playwright() as p:
     # Legacy migration through the same import flow.
     page.locator('#import-file').set_input_files(str(ROOT / 'tests/fixtures/v1-save.json'))
     action('confirmImport')
-    assert saved()['version'] == 3
+    assert saved()['version'] == 4
     assert saved()['fleet'][0]['registry'] == 'NX-01'
     # Restore expanded campaign for responsive pages.
     nav('help'); page.locator('#import-file').set_input_files(str(exported)); action('confirmImport')

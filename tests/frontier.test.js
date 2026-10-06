@@ -116,7 +116,7 @@ test("old saves expand the chart without losing known contacts, ship identities,
   const s=createGame(); s.version=2; s.sectors=s.sectors.slice(0,6); s.resources.energy=73;
   s.fleet[0].name="UES Legacy"; s.relations.romulan.status="war";
   for(const key of ["contacts","discoveries","projects","away","awayHistory","monthlyEvent","eventHistory","eventSeed"]) delete s[key];
-  const restored=restoreSave(JSON.stringify(s)); assert.ok(restored); assert.equal(restored.version,3);
+  const restored=restoreSave(JSON.stringify(s)); assert.ok(restored); assert.equal(restored.version,4);
   assert.equal(restored.fleet[0].name,"UES Legacy"); assert.equal(restored.relations.romulan.status,"war");
   assert.equal(restored.contacts.length,5); assert.equal(restored.sectors.length,18); assert.equal(restored.resources.energy,73);
 });

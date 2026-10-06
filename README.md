@@ -8,9 +8,9 @@
 
 **A text-driven strategy game about exploration, civilization, and the choices that change history.**
 
-[**Download & play**](https://github.com/HUHman416/StarTrekDivergence/releases/latest) · [What's new in v0.3](docs/releases/v0.3.md) · [Project vision](docs/PROJECT_MEMORY.md) · [Report an issue](https://github.com/HUHman416/StarTrekDivergence/issues)
+[**Download & play**](https://github.com/HUHman416/StarTrekDivergence/releases/latest) · [What's new in v0.4](docs/releases/v0.4.md) · [Project vision](docs/PROJECT_MEMORY.md) · [Report an issue](https://github.com/HUHman416/StarTrekDivergence/issues)
 
-**ALPHA v0.3** · Single-file browser game · Offline play · Local saves
+**ALPHA v0.4** · Single-file browser game · Offline play · Local saves
 
 </div>
 
@@ -25,7 +25,7 @@ Your allies and enemies are yours to choose. A Klingon alliance is possible. A d
 ## Play in under a minute
 
 1. Open the [latest release](https://github.com/HUHman416/StarTrekDivergence/releases/latest).
-2. Download **`StarTrekDivergence-v0.3.html`**. The ZIP is optional and includes the same game plus a quick-start guide.
+2. Download **`StarTrekDivergence-v0.4.html`**. The ZIP is optional and includes the same game plus a quick-start guide.
 3. Double-click the HTML file, or drag it into a modern browser.
 4. Select **Start tutorial**. Prefer to explore? Choose a council response, then click **Next month**.
 
@@ -42,7 +42,7 @@ The guide is optional and can be skipped or replayed from **Academy & saves**.
 | **Organize independent fleets** | Command up to three fleets, five ships per fleet, and twelve ships overall. Transfer vessels when fleets meet. |
 | **Explore with purpose** | Visit 18 systems, scout for six research discoveries, complete field projects, escort convoys, and patrol. |
 | **Make first contact** | Meet civilizations at their home systems or when their delegations visit your territory. Diplomacy opens after contact. |
-| **Lead an away team** | Explore six sites in a first-person grid view. Move, scan, preserve discoveries, or recover materials. |
+| **Lead an away team** | Explore six sites with continuous first-person movement, phasers, hostile encounters, cover, ceasefires, and recoverable evacuation. |
 | **Compare your options** | Compare all four ship designs and every owned vessel, including current upgrades, condition, roles, and commissioning costs. |
 | **Manage the unexpected** | Five event types have a 35% chance to occur each month. Decide how to respond. |
 | **Set the pace** | Advance 1, 3, 6, or 12 months, with automatic stops for decisions, arrivals, first contact, and reports. |
@@ -52,15 +52,29 @@ The guide is optional and can be skipped or replayed from **Academy & saves**.
 | **Take the bridge** | Command individual vessels, select targets, direct fleet formations, allocate power, and disable enemy subsystems. |
 | **Find another way out** | Hail an opponent or withdraw. Combat does not require destroying every enemy hull. |
 
-### A new command interface
+### A command interface that grows with your civilization
+
+The calendar selects **early-warp instrumentation (2151)**, **duotronic controls (2245)**, **refit tactical (2285)**, or **next-generation LCARS (2364)**. Palette, panel shapes, navigation, and mission displays change together. New Campaign lets you start in any era; later starts reuse the same alternate-history founding story and include period sidearms. These are game-design boundaries, not a forced canon chronology.
 
 The orange elbows, pastel navigation segments, dark displays, and rounded controls take visual direction from HUHman's [LCARS Command Interface](https://github.com/HUHman416/LCARS-Command-Interface). Game screens remain keyboard-accessible and adapt to phone, tablet, and desktop widths. The UI is an original CSS implementation; it does not require the reference project's desktop services.
 
 ### Leave orbit. Lead the team.
 
-Scout **Mutara Nebula, Cygnus Rift, Rigel Belt, New Eden, Silent Archive, or Haven Outpost**. With a fleet in orbit, choose **Deploy away team** from the system briefing. Use **W/A/S/D**, arrow keys, or the on-screen buttons to move and turn. Approach a numbered scanner marker, scan the object, and choose what to do. **Recall away team** returns to the campaign; completed objectives are retained.
+Scout **Mutara Nebula, Cygnus Rift, Rigel Belt, New Eden, Silent Archive, or Haven Outpost**. With a fleet in orbit, choose **Deploy away team**, review the briefing, then **Begin mission**.
 
-![First-person away-team mission at Haven](docs/images/away.png)
+- **WASD:** continuous movement and strafing. **Mouse / arrows / Q/E:** aim and turn.
+- **Click / Space:** fire. **R:** cycle the energy cell. **F:** scan a nearby objective.
+- **Escape / Pause mission:** pause. Changing screens, switching windows, and loading a save also pause combat.
+- Hold the on-screen movement controls for touch play, or use the paused step controls for assisted exploration.
+- **Stun** is the default. High-power fire does more damage and consumes two charges; forceful takedowns influence campaign ethics.
+- Walls block sight and incoming fire. Field medicine restores health. A ceasefire broadcast provides a guaranteed peaceful exit in this prototype.
+- **Recall** safely returns the team, even after incapacitation; completed objectives persist. Enemies currently reset on a later deployment, with no combat rewards to farm.
+
+Four locations contain autonomous security and, in Rigel, unaffiliated raiders. Haven and New Eden remain peaceful. No species is made an enemy automatically.
+
+Era-specific sidearms change shape, color, damage, firing rate, and cell capacity. Reaching a year unlocks research; completing that research issues the weapon on the next deployment. Fleet weapons research also improves phaser damage, hull lattice reduces incoming damage, and field medicine adds a second medical kit.
+
+![First-person away-team combat](docs/images/away-v04.png)
 
 Survey discoveries unlock new research. Completing the Silent Archive and Haven away missions unlocks hull-lattice and field-medicine research. Four additional destinations offer one-time field projects for research, energy, alloys, or influence.
 
@@ -98,7 +112,7 @@ For a reliable manual backup, open the old game and use the browser's developer 
 
 </details>
 
-**v0.2 campaigns are supported:** export from the old game and import here. Existing contacts, wars, treaties, ship names, and registries remain intact; the expanded frontier is added around your progress. New campaigns begin with only a visiting Vulcan delegation known.
+**v0.2 and v0.3 campaigns are supported:** export from the old game and import here. Existing contacts, wars, treaties, ship names, and registries remain intact; the expanded frontier is added around your progress. New campaigns begin with only a visiting Vulcan delegation known. Existing v0.3 away deployments migrate without spawning surprise enemies. New saves use schema 4 and preserve exact position, enemies, health, and ammunition.
 
 ## Where this is going
 
@@ -107,7 +121,7 @@ For a reliable manual backup, open the old game and use the browser's developer 
 - **After the look and gameplay are established:** native **Linux and Windows builds**.
 - **After the base game is release-ready:** mod support and an intuitive **built-in mod manager**.
 
-This alpha uses an 18-system schematic map and a compressed alternate-history founding chapter. Klingon and Romulan starts have faction bonuses but currently share the prototype story structure. The economy, diplomatic responses, and combat are early systems for iteration. Away missions use a simple first-person, grid-based corridor renderer with six themed scenarios sharing a layout; they are an initial exploration prototype, not a free-roaming 3D game. There is no multiplayer, finished strategic opponent AI, native installer, or mod loader yet.
+This alpha uses an 18-system schematic map and a compressed alternate-history founding chapter. Klingon and Romulan starts have faction bonuses but currently share the prototype story structure. The economy, diplomatic responses, and combat are early systems for iteration. Away missions use a 2.5D raycast renderer with free movement on a shared corridor floor plan. Models and scenery are original procedural placeholders; vertical aiming, imported 3D meshes, varied floor plans, and squad AI are not implemented. The [Sketchfab shortlist](docs/ASSET_CANDIDATES.md) records verified candidates; downloads require sign-in and no third-party model is bundled. There is no multiplayer, finished strategic opponent AI, native installer, or mod loader yet.
 
 The [project memory](docs/PROJECT_MEMORY.md) records HUHman's requirements, decisions, and future ideas for subsequent development sessions.
 
@@ -131,6 +145,7 @@ For browser checks, install Python Playwright and Chromium, start the developmen
 ```sh
 python3 tests/browser_smoke.py
 python3 tests/frontier_browser.py
+python3 tests/away_browser.py
 python3 tests/bundle_smoke.py    # Run npm run build first
 ```
 
@@ -140,6 +155,7 @@ Set `CHROMIUM_PATH` if the browser is not at `/usr/bin/chromium`. Set `DIVERGENC
 |---|---|
 | `src/game.js` | Campaign simulation, missions, fleets, diplomacy, combat, and save migration |
 | `src/app.js` | Interface, tutorial presentation, browser storage, and file import/export |
+| `src/fps.js` | First-person rendering and original procedural artwork |
 | `src/styles.css` | Responsive visual design |
 | `tests/` | Simulation tests, legacy-save fixture, and browser walkthroughs |
 | `scripts/` | Single-file packaging and release artifact generation |
@@ -152,7 +168,7 @@ The original **`Alpha`** tag and **Star Trek Divergence v0.1** release are prese
 
 ### Validation
 
-The v0.3 simulation suite covers founding choices, diplomacy, combat, independent fleets, legacy saves, contact visibility, exploration research, all six away sites, one-time rewards, monthly events, and safe multi-month advancement. Browser walkthroughs cover existing gameplay and the new frontier systems. Responsive checks cover all ten screens at 390, 768, and 1440 pixels. The release bundle has a separate offline-play and external-asset check.
+The 68-test simulation suite covers era boundaries, equipment research, first-person collision and aiming, cover, enemy attacks, ammunition, medicine, evacuation, v0.3 migration, and founding choices, diplomacy, combat, independent fleets, legacy saves, contact visibility, exploration research, all six away sites, one-time rewards, monthly events, and safe multi-month advancement. Browser walkthroughs cover existing gameplay and the new frontier systems. Responsive checks cover all ten screens at 390, 768, and 1440 pixels. The release bundle has a separate offline-play and external-asset check.
 
 The managed test browser blocks direct `file://` navigation, so automated bundle checks use HTTP. HUHman successfully playtested the original standalone HTML; direct opening of each new release should remain part of user playtesting.
 

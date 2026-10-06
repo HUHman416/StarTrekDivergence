@@ -1,6 +1,21 @@
-export const GAME_VERSION = "0.3.0";
-export const SAVE_VERSION = 3;
+export const GAME_VERSION = "0.4.0";
+export const SAVE_VERSION = 4;
 export const SAVE_KEY = "divergence.campaign.v1";
+// Era boundaries are campaign design presets, not a forced canon timeline.
+export const ERAS = [
+  { id: "frontier", year: 2151, name: "Early warp", interface: "NX instrumentation", weapon: "Phase pistol", color: "#79c9ec", damage: 22, capacity: 8, interval: .48 },
+  { id: "constitution", year: 2245, name: "Constitution age", interface: "Duotronic command", weapon: "Type-II phaser", color: "#edba54", damage: 27, capacity: 10, interval: .4 },
+  { id: "refit", year: 2285, name: "Refit age", interface: "Refit tactical", weapon: "Assault phaser", color: "#9ee5c7", damage: 32, capacity: 12, interval: .34 },
+  { id: "nextgen", year: 2364, name: "Next generation", interface: "LCARS", weapon: "Type-II compression phaser", color: "#c5a8f0", damage: 38, capacity: 16, interval: .28 },
+];
+export function campaignYear(s) { return (s.startYear ?? 2151) + Math.floor((s.turn - 1) / 12); }
+export function currentEra(s) { return ERAS.findLast(e => campaignYear(s) >= e.year) || ERAS[0]; }
+export function awayEquipment(s) {
+  const era = currentEra(s);
+  const level = ERAS.filter(e => e.year <= era.year && (e.id === "frontier" || s.tech.includes("sidearm_" + e.id))).at(-1);
+  return { ...level, damage: level.damage + (s.tech.includes("weapons") ? 5 : 0),
+    protection: s.tech.includes("armor") ? .7 : 1, medkits: s.tech.includes("medicine") ? 2 : 1 };
+}
 export const FACTIONS = {
   earth: {
     name: "United Earth",
@@ -108,6 +123,10 @@ Object.assign(TECH, {
   armor: { name: "Crystalline hull lattice", cost: 100, source: "relic", away: true, description: "+25 maximum hull on existing and future ships. Complete the relic away mission to unlock." },
   medicine: { name: "Adaptive field medicine", cost: 80, source: "haven", away: true, description: "+10 research for every later away-site interaction. Complete the Haven away mission to unlock." },
 });
+for (const era of ERAS.slice(1)) TECH["sidearm_" + era.id] = {
+  name: era.weapon, year: era.year, cost: 60 + ERAS.indexOf(era) * 25,
+  description: `Away-team sidearm: ${era.damage} base damage, ${era.capacity} shots per cell. Available from ${era.year}; issued on your next deployment.`,
+};
 const SECTORS = [
   {
     id: "sol",
@@ -213,8 +232,9 @@ const ship = (id, name, cls = "NX-class explorer") => ({
   maxShields: 70,
   damage: 24,
 });
-export function createGame(faction = "earth") {
+export function createGame(faction = "earth", startYear = 2151) {
   if (!FACTIONS[faction]) faction = "earth";
+  if (!ERAS.some(e => e.year === startYear)) startYear = 2151;
   const f = FACTIONS[faction];
   const sectors = structuredClone(SECTORS);
   sectors[0].name = f.home;
@@ -222,6 +242,7 @@ export function createGame(faction = "earth") {
   if (duplicate) Object.assign(duplicate, { name: "Sol", power: "earth" });
   return {
     version: SAVE_VERSION,
+    startYear,
     contacts: ["vulcan"],
     discoveries: [],
     projects: [],
@@ -281,7 +302,7 @@ export function createGame(faction = "earth") {
     ],
     sectors,
     location: "sol",
-    tech: [],
+    tech: ERAS.filter(e => e.id !== "frontier" && e.year <= startYear).map(e => "sidearm_" + e.id),
     buildings: { reactor: 0, foundry: 0 },
     ethics: { cooperation: 0, independence: 0, force: 0 },
     eventIndex: 0,
@@ -614,7 +635,9 @@ export function advance(s) {
     throw new Error("Resolve the council decision before advancing the month.");
   const gain = income(s);
   Object.entries(gain).forEach(([k, v]) => (s.resources[k] += v));
+  const previousEra = currentEra(s).id;
   s.turn++;
+  if (currentEra(s).id !== previousEra) addLog(s, `${currentEra(s).name}: ${currentEra(s).interface} is online. New sidearm research is available.`, "discovery");
   processAssignments(s);
   processConsequences(s);
   processDiplomacy(s);
@@ -1853,7 +1876,7 @@ export function restoreSave(raw) {
     const unique = (values) => new Set(values).size === values.length;
     if (
       !obj(s) ||
-      ![1, 2, SAVE_VERSION].includes(s.version) ||
+      ![1, 2, 3, SAVE_VERSION].includes(s.version) ||
       !Object.hasOwn(FACTIONS, s.faction) ||
       !int(s.turn, 1) ||
       !arr(s.fleet, 12) ||
@@ -1864,7 +1887,8 @@ export function restoreSave(raw) {
       return null;
     if (s.version === 1) s = migrateV1(s);
     if (s.version === 2) s = migrateV2(s);
-    if (!validFrontierSave(s)) return null;
+    if (s.version === 3) s = migrateV3(s);
+    if (!validFrontierSave(s) || !validAwayCombat(s)) return null;
     const sectorIds = SECTORS.map((x) => x.id);
     if (
       s.sectors.length !== SECTORS.length ||
@@ -2143,7 +2167,7 @@ export function sectorLabel(s, sector) {
     ? `Unknown signal ${String(s.sectors.indexOf(sector) + 1).padStart(2, "0")}` : sector.name;
 }
 export function techAvailable(s, id) {
-  return Object.hasOwn(TECH, id) && (!TECH[id].source || s.discoveries.includes(id));
+  return Object.hasOwn(TECH, id) && (!TECH[id].source || s.discoveries.includes(id)) && (!TECH[id].year || campaignYear(s) >= TECH[id].year);
 }
 export function designStats(s, role) {
   const r = ROLES[role];
@@ -2254,7 +2278,8 @@ export function startAway(s, id) {
   if (s.awayHistory[id]?.length === 3) throw new Error("All objectives at this site are complete.");
   pay(s, { energy: 10 });
   s.away = { sectorId: id, fleetId: f.id, x: 4, y: 7, direction: 0, scanned: [], resolved: [...(s.awayHistory[id] || [])], message: AWAY_SITES[sector.site].intro };
-  return "Away team deployed. Use the movement controls or W/A/S/D and your scanner.";
+  equipAway(s);
+  return "Away team deployed. Review your briefing, then begin the live mission or use the step controls.";
 }
 export function awayNear(s) {
   if (!s.away) return [];
@@ -2267,6 +2292,8 @@ export function awayAction(s, action, index) {
     s.awayHistory[a.sectorId] = [...a.resolved]; s.away = null;
     return "Away team safely recalled. Completed objectives are preserved.";
   }
+  if (a.health <= 0) throw new Error("Team incapacitated. Recall for medical evacuation.");
+  if (["scan", "study", "salvage"].includes(action) && a.enemies.some(e => e.hp > 0 && Math.hypot(e.x-a.px,e.y-a.py)<2 && awayLineOfSight(a.px,a.py,e.x,e.y))) throw new Error("Hostile nearby. Secure the area or negotiate first.");
   if (action === "left" || action === "right") a.direction = (a.direction + (action === "left" ? 3 : 1)) % 4;
   else if (action === "forward" || action === "back") {
     const [dx,dy] = [[0,-1],[1,0],[0,1],[-1,0]][a.direction], sign = action === "forward" ? 1 : -1,
@@ -2298,6 +2325,9 @@ export function awayAction(s, action, index) {
       }
     }
   } else throw new Error("Unknown away-team command.");
+  if (["forward", "back", "left", "right"].includes(action)) {
+    a.px=a.x+.5; a.py=a.y+.5; a.angle=a.direction*Math.PI/2-Math.PI/2;
+  }
   return ["forward", "back", "left", "right"].includes(action) ? "" : a.message;
 }
 function migrateV2(s) {
@@ -2310,7 +2340,7 @@ function migrateV2(s) {
   if (s.sectors.length !== 6 || !s.sectors.every(x => legacyIds.includes(x.id)) || new Set(s.sectors.map(x=>x.id)).size !== 6)
     throw new Error("Invalid legacy star chart.");
   s.sectors.push(...base.sectors.filter(x => !legacyIds.includes(x.id)));
-  s.version = SAVE_VERSION;
+  s.version = 3;
   return s;
 }
 function validFrontierSave(s) {
@@ -2334,4 +2364,125 @@ function validFrontierSave(s) {
         JSON.stringify(a.resolved) !== JSON.stringify(s.awayHistory[a.sectorId] || []) || typeof a.message !== "string" || a.message.length > 1500) return false;
   }
   return true;
+}
+
+export function awayLineOfSight(x, y, tx, ty) {
+  const distance = Math.hypot(tx-x,ty-y), steps = Math.ceil(distance/.04);
+  for (let i=0; i<=steps; i++) {
+    const t=steps ? i/steps : 0;
+    if (AWAY_LAYOUT[Math.floor(y+(ty-y)*t)]?.[Math.floor(x+(tx-x)*t)] !== ".") return false;
+  }
+  return true;
+}
+function equipAway(s, legacy = false) {
+  const a=s.away, site=s.sectors.find(x=>x.id===a.sectorId).site, gear=awayEquipment(s);
+  // Existing deployments migrate peacefully; new deployments carry a threat briefing.
+  const types=legacy || ["clinic","garden"].includes(site) ? [] : site==="mine" ? ["raider","drone"] : ["drone","drone"];
+  Object.assign(a, { px:a.x+.5, py:a.y+.5, angle:a.direction*Math.PI/2-Math.PI/2,
+    health:100, charge:gear.capacity, weapon:gear.id, mode:"stun", cooldown:0, reload:0,
+    medkits:gear.medkits, flash:0, hurt:0, elapsed:0, diplomacy:false,
+    enemies:types.map((kind,i)=>({id:`guard-${i}`,kind,x:i?6.5:2.5,y:i?2.5:4.5,hp:kind==="drone"?66:55,cooldown:2.5,alert:false})),
+  });
+}
+function migrateV3(s) {
+  s.startYear=2151;
+  if(s.away) equipAway(s,true);
+  s.version=SAVE_VERSION;
+  return s;
+}
+export function deployedEquipment(s) {
+  const base=ERAS.find(e=>e.id===s.away?.weapon) || awayEquipment(s);
+  return {...base, damage:base.damage+(s.tech.includes("weapons")?5:0)};
+}
+function awayWalkable(x,y) {
+  return [-.18,.18].every(dx=>[-.18,.18].every(dy=>AWAY_LAYOUT[Math.floor(y+dy)]?.[Math.floor(x+dx)]==="."));
+}
+export function awayLook(s, delta) {
+  if(!s.away || !Number.isFinite(delta)) return;
+  s.away.angle = Math.atan2(Math.sin(s.away.angle+delta),Math.cos(s.away.angle+delta));
+  s.away.direction=((Math.round((s.away.angle+Math.PI/2)/(Math.PI/2))%4)+4)%4;
+}
+export function awayTick(s, input={}, seconds=.05) {
+  const a=s.away;
+  if (!a || a.health<=0 || !Number.isFinite(seconds) || seconds<=0) return;
+  const dt=Math.min(.1,seconds), gear=deployedEquipment(s);
+  a.elapsed+=dt;
+  for(const key of ["cooldown","flash","hurt"]) a[key]=Math.max(0,a[key]-dt);
+  if(a.reload>0) {a.reload=Math.max(0,a.reload-dt); if(a.reload===0) a.charge=gear.capacity;}
+  awayLook(s, Math.max(-1,Math.min(1,Number(input.turn)||0))*dt*1.9);
+  let forward=Math.max(-1,Math.min(1,Number(input.forward)||0)), strafe=Math.max(-1,Math.min(1,Number(input.strafe)||0));
+  const norm=Math.max(1,Math.hypot(forward,strafe)); forward/=norm;strafe/=norm;
+  const dx=(Math.cos(a.angle)*forward-Math.sin(a.angle)*strafe)*dt*1.9,
+    dy=(Math.sin(a.angle)*forward+Math.cos(a.angle)*strafe)*dt*1.9;
+  if(awayWalkable(a.px+dx,a.py)) a.px+=dx;
+  if(awayWalkable(a.px,a.py+dy)) a.py+=dy;
+  a.x=Math.floor(a.px);a.y=Math.floor(a.py);
+  for(const e of a.enemies) {
+    if(e.hp<=0) continue;
+    e.cooldown=Math.max(0,e.cooldown-dt);
+    const d=Math.hypot(e.x-a.px,e.y-a.py), visible=awayLineOfSight(e.x,e.y,a.px,a.py);
+    if(d<5 && visible) e.alert=true;
+    if(!e.alert || !visible) continue;
+    if(d>2) {
+      const step=dt*(e.kind==="drone"?.38:.52), ex=(a.px-e.x)/d*step,ey=(a.py-e.y)/d*step;
+      if(awayWalkable(e.x+ex,e.y)) e.x+=ex;
+      if(awayWalkable(e.x,e.y+ey)) e.y+=ey;
+    }
+    if(d<5 && e.cooldown===0) {
+      a.health=Math.max(0,a.health-(e.kind==="drone"?9:12)*(s.tech.includes("armor")?.7:1));
+      a.hurt=.25;e.cooldown=2;
+      a.message=a.health>0?"Incoming fire. Break line of sight, return fire, or broadcast a ceasefire.":"Team incapacitated. Emergency transporter lock ready: recall to evacuate. Completed objectives are safe.";
+    }
+  }
+  if(input.fire && a.health>0) awayCombat(s,"fire");
+}
+export function awayCombat(s, action) {
+  const a=s.away;
+  if(!a) throw new Error("No away team is deployed.");
+  if(a.health<=0) throw new Error("Team incapacitated. Recall for medical evacuation.");
+  const gear=deployedEquipment(s);
+  if(action==="mode") {a.mode=a.mode==="stun"?"overload":"stun"; a.message=a.mode==="stun"?"Stun selected. Nonlethal restraint.":"High power selected. More damage; twice the cell consumption. Forceful takedowns affect your campaign ethics.";}
+  else if(action==="reload") {
+    if(a.reload || a.charge===gear.capacity) return "";
+    a.reload=1.5; a.message="Cycling a fresh energy cell…";
+  } else if(action==="medkit") {
+    if(!a.medkits) throw new Error("No field medical kits remain. Recall for treatment.");
+    if(a.health>=100) throw new Error("The team is already at full health.");
+    a.medkits--; a.health=Math.min(100,a.health+45);a.message="Field treatment restores 45 health.";
+  } else if(action==="hail") {
+    if(a.diplomacy) throw new Error("The ceasefire broadcast has already been accepted.");
+    a.diplomacy=true; a.enemies.forEach(e=>{e.hp=0;});
+    a.message="Your team transmits a stand-down protocol and offers safe passage. Raiders withdraw; autonomous security accepts the override. The site is secure.";
+    addLog(s,`${s.sectors.find(x=>x.id===a.sectorId).name}: away team secured the site without further fighting.`,"mission");
+  } else if(action==="fire") {
+    if(a.cooldown || a.reload) return "";
+    const cost=a.mode==="stun"?1:2;
+    if(a.charge<cost) {a.message="Energy cell depleted. Press R or cycle the cell.";return a.message;}
+    a.charge-=cost;a.cooldown=gear.interval;a.flash=.13;
+    const targets=a.enemies.filter(e=>e.hp>0).map(e=>({e,d:Math.hypot(e.x-a.px,e.y-a.py),
+      angle:Math.atan2(Math.sin(Math.atan2(e.y-a.py,e.x-a.px)-a.angle),Math.cos(Math.atan2(e.y-a.py,e.x-a.px)-a.angle))}))
+      .filter(t=>Math.abs(t.angle)<Math.atan2(.27,t.d) && t.d<8 && awayLineOfSight(a.px,a.py,t.e.x,t.e.y)).sort((l,r)=>l.d-r.d);
+    const target=targets[0]?.e;
+    if(target) {
+      target.hp=Math.max(0,target.hp-gear.damage*(a.mode==="overload"?1.7:1));target.alert=true;
+      a.message=target.hp>0?"Phaser hit. Target still active.":a.mode==="stun"?"Target stunned. Area scan updated.":"Target neutralized by high-power fire.";
+      if(target.hp===0 && a.mode==="overload") s.ethics.force++;
+    } else a.message="Phaser discharge. No target hit.";
+  } else throw new Error("Unknown away combat command.");
+  return a.message;
+}
+function validAwayCombat(s) {
+  const n=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
+  if(!ERAS.some(e=>e.year===s.startYear)) return false;
+  if(s.tech.some(id=>TECH[id]?.year>campaignYear(s))) return false;
+  const a=s.away;if(!a) return true;
+  const gear=ERAS.find(e=>e.id===a.weapon);
+  if(!gear || gear.year>campaignYear(s) || (gear.id!=="frontier"&&!s.tech.includes("sidearm_"+gear.id)) ||
+    !n(a.px,1,8)||!n(a.py,1,8)||Math.floor(a.px)!==a.x||Math.floor(a.py)!==a.y||
+    !n(a.angle,-Math.PI,Math.PI)||!n(a.health,0,100)||!Number.isInteger(a.charge)||!n(a.charge,0,gear.capacity)||
+    !["stun","overload"].includes(a.mode)||!n(a.cooldown,0,1)||!n(a.reload,0,1.5)||!n(a.flash,0,.2)||!n(a.hurt,0,.3)||
+    !Number.isInteger(a.medkits)||!n(a.medkits,0,2)||!n(a.elapsed,0,1e9)||typeof a.diplomacy!=="boolean"||
+    !Array.isArray(a.enemies)||a.enemies.length>2||new Set(a.enemies.map(e=>e.id)).size!==a.enemies.length) return false;
+  return a.enemies.every(e=>e&&/^guard-[01]$/.test(e.id)&&["drone","raider"].includes(e.kind)&&n(e.x,1,8)&&n(e.y,1,8)&&
+    AWAY_LAYOUT[Math.floor(e.y)]?.[Math.floor(e.x)]==="."&&n(e.hp,0,e.kind==="drone"?66:55)&&n(e.cooldown,0,2.5)&&typeof e.alert==="boolean");
 }
