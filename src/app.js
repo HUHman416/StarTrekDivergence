@@ -1,5 +1,6 @@
+import { paintAway } from "./fps.js";
 import {
-  GAME_VERSION,
+  GAME_VERSION, ERAS, currentEra, campaignYear, awayEquipment, deployedEquipment, awayTick, awayLook, awayCombat,
   MONTHLY_EVENTS, AWAY_SITES, AWAY_LAYOUT, AWAY_OBJECT_POSITIONS,
   sectorLabel, techAvailable, designStats, completeProject,
   startAway, awayAction, awayNear, advanceMonths, resolveMonthlyEvent,
@@ -59,6 +60,10 @@ let toastTimer;
 let saveAvailable = true;
 let commissionRole = "cruiser";
 let monthsToAdvance = 1;
+let awayLive = false;
+const awayKeys = new Set();
+const touchKeys = new Set();
+let awayUIStamp = "", frameTime = 0, saveTime = 0, drawTime = 0;
 const escape = (value) =>
   String(value).replace(
     /[&<>"']/g,
@@ -129,7 +134,7 @@ function date() {
     "NOV",
     "DEC",
   ];
-  return `${months[(state.turn - 1) % 12]} ${2151 + Math.floor((state.turn - 1) / 12)}`;
+  return `${months[(state.turn - 1) % 12]} ${campaignYear(state)}`;
 }
 function heading(kicker, title, text = "", extra = "") {
   return `<div class="page-heading"><div><div class="eyebrow">${kicker}</div><h1>${title}</h1>${text ? `<p>${text}</p>` : ""}</div>${extra}</div>`;
@@ -147,13 +152,15 @@ const navigation = [
   ["help", "book", "Academy & saves"],
 ];
 function render() {
+  pauseAway();
+  document.documentElement.dataset.era = currentEra(state).id;
   const rates = income(state);
   app.innerHTML = `<div class="shell">
     <aside class="sidebar">
       <a href="#overview" class="brand" data-action="nav" data-view="overview" aria-label="Star Trek Divergence overview">${delta()}<span><span class="brand-small">STAR TREK</span><strong>DIVERGENCE</strong><span class="brand-caption">WRITE YOUR OWN FUTURE</span></span></a>
       <div class="nav-label">COMMAND INTERFACE <span>01</span></div>
       <nav aria-label="Main navigation">${navigation.map(([id, i, label]) => `<button data-action="nav" data-view="${id}" aria-label="${label}" title="${label}" class="nav-item ${view === id ? "active" : ""}" ${view === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${label}</span>${id === "tactical" && state.battle ? '<i class="red-dot"></i>' : ""}${id === "overview" && !state.eventResolved && currentEvent(state) ? '<span class="nav-count">1</span>' : ""}</button>`).join("")}</nav>
-      <div class="sidebar-bottom"><div class="quote">“Somewhere, something<br>incredible is waiting<br>to be known.”</div><div class="faction-id">${delta()}<div><strong>${FACTIONS[state.faction].name}</strong><span>${state.charter ? "FOUNDING CHARTER RATIFIED" : "EARLY WARP ERA · 2151"}</span></div><span class="online-dot"></span></div><button class="new-campaign" data-action="new">New campaign ${icon("arrow")}</button><div class="build-label">FAN PROJECT <span>ALPHA v0.3</span></div></div>
+      <div class="sidebar-bottom"><div class="quote">“Somewhere, something<br>incredible is waiting<br>to be known.”</div><div class="faction-id">${delta()}<div><strong>${FACTIONS[state.faction].name}</strong><span>${currentEra(state).name.toUpperCase()} · ${campaignYear(state)}</span></div><span class="online-dot"></span></div><button class="new-campaign" data-action="new">New campaign ${icon("arrow")}</button><div class="build-label">FAN PROJECT <span>ALPHA v0.4</span></div></div>
     </aside>
     <div class="workspace"><header class="topbar"><div class="breadcrumb">FLEET OPERATIONS <span>/</span> <strong>${navigation.find((n) => n[0] === view)?.[2].toUpperCase()}</strong></div><div class="topbar-right"><span class="save-state">${icon("check")} ${saveAvailable ? "AUTOSAVE ACTIVE" : "STORAGE UNAVAILABLE"}</span><button class="icon-button" data-action="save" aria-label="Save campaign">${icon("save")}</button><button class="icon-button" data-action="new" aria-label="Choose a new faction" title="New campaign">${icon("plus")}</button><button class="icon-button" data-action="nav" data-view="help" aria-label="Help and saves" title="Tutorial and save files">?</button><span class="commander-avatar">C</span></div></header>
     <div class="resourcebar">${Object.entries(state.resources)
@@ -167,6 +174,7 @@ function render() {
     <main id="main">${tutorialBanner()}${priorityTransmission()}${{ overview, galaxy, fleet, diplomacy: diplomacyView, research, tactical, missions: missionsView, help: helpView, log: logView, away: awayView }[view]()}</main>
     <footer class="footer"><span><i class="online-dot"></i> ${state.battle ? "TACTICAL LINK ESTABLISHED" : "SUBSPACE LINK ESTABLISHED"}</span><span>THE FUTURE IS UNWRITTEN.</span><span>LOCAL CAMPAIGN · ${saveAvailable ? "AUTO-SAVED" : "UNSAVED"}</span></footer></div>
   </div>${modal ? renderModal() : ""}`;
+  paintAway(document.querySelector("#away-canvas"), state, awayLive);
   if (modal) {
     const el = document.querySelector(".modal");
     el?.querySelector("input, button")?.focus();
@@ -190,7 +198,7 @@ function overview() {
     (r) => r.status === "allied",
   ).length;
   return `${heading("YOUR VOYAGE BEGINS HERE", "A future of your own making.", "Explore the unknown. Choose your allies. Give your people a tomorrow.", `<div class="heading-tag">${icon("compass")} ${state.charter ? "A NEW CHAPTER" : "THE FIRST FRONTIER"}</div>`)}
-  <section class="hero panel"><div class="hero-orbits"></div><div class="hero-content"><div class="eyebrow"><span class="live-dot"></span> ${FACTIONS[state.faction].era}</div><h2>${state.charter ? escape(state.charter) : FACTIONS[state.faction].title}</h2><p>${state.charter ? `Your founding charter is signed. ${state.founders?.length || 0} allied powers stand with you. The next chapter remains yours to write.` : "Before the alliances. Before the legends. A single ship, an open sky, and the courage to choose a different path."}</p><button class="text-button" data-action="nav" data-view="galaxy">Chart your course ${icon("arrow")}</button></div><div class="hero-emblem">${delta()}<span>AD ASTRA PER ASPERA</span></div><div class="hero-index">ORIGINS <span>/ 01</span></div></section>
+  <section class="hero panel"><div class="hero-orbits"></div><div class="hero-content"><div class="eyebrow"><span class="live-dot"></span> ${campaignYear(state)} · ${currentEra(state).name.toUpperCase()}</div><h2>${state.charter ? escape(state.charter) : FACTIONS[state.faction].title}</h2><p>${state.charter ? `Your founding charter is signed. ${state.founders?.length || 0} allied powers stand with you. The next chapter remains yours to write.` : "Before the alliances. Before the legends. A single ship, an open sky, and the courage to choose a different path."}</p><button class="text-button" data-action="nav" data-view="galaxy">Chart your course ${icon("arrow")}</button></div><div class="hero-emblem">${delta()}<span>AD ASTRA PER ASPERA</span></div><div class="hero-index">ORIGINS <span>/ 01</span></div></section>
   <div class="overview-grid"><section class="panel sector-panel"><div class="panel-heading"><h2>${icon("galaxy")} The local frontier</h2><button class="text-button small" data-action="nav" data-view="galaxy">Open star chart ${icon("arrow")}</button></div>${starMap()}<div class="map-caption"><span>${icon("compass")} ${state.sectors.filter((s) => s.surveyed).length} of ${state.sectors.length} systems surveyed</span><span>${state.sectors.some((s) => s.threat) ? '<i class="orange-dot"></i> 1 active distress signal' : `${icon("check")} Local shipping lanes secure`}</span></div></section>
   <section class="panel council-panel"><div class="panel-heading"><h2>${icon("diplomacy")} The council awaits</h2><span class="tag ${state.eventResolved ? "" : "amber"}">${state.eventResolved ? "RESOLVED" : event ? "DECISION" : "CHARTER SIGNED"}</span></div><div class="council-content"><div class="eyebrow">${event?.kicker || "YOUR NEXT CHAPTER"}</div><h2>${event?.title || "History is still being written."}</h2><p>${event?.body || "Your founding convention is complete. Continue exploring, building your fleet, conducting research, and shaping your relationships with the galaxy."}</p>${state.eventResolved ? `<div class="decision-made">${icon("check")} ${escape(state.eventChoices.at(-1).choice)}<small>Your decision has become part of your history.</small></div>` : event ? `<div class="choices">${event.choices.map((c, i) => `<button class="choice" data-action="decision" data-index="${i}"><span class="choice-number">0${i + 1}</span><span><strong>${c.label}</strong><small>${c.effect}</small></span>${icon("chevron")}</button>`).join("")}</div>` : button("Read your captain’s log " + icon("arrow"), "nav", "secondary", 'data-view="log"')}</div></section></div>
   <div class="bottom-grid"><section class="panel fleet-summary"><div class="panel-heading"><h2>${icon("fleet")} ${escape(activeFleet(state).name)}</h2><button class="text-button small" data-action="nav" data-view="fleet">Manage fleet ${icon("arrow")}</button></div><div class="fleet-mini">${shipArt()}<div><div class="eyebrow">FLAGSHIP · ${escape(state.fleet[0].cls)}</div><h3>${escape(state.fleet[0].name)}</h3><small class="registry">${escape(state.fleet[0].registry)}</small><p>${state.fleet.length} vessels across ${state.taskForces.length} fleets <span>•</span> ${state.fleet.every((v) => v.hull === v.maxHull) ? "All systems operational" : "Repairs recommended"}</p></div><div class="mini-status"><span class="online-dot"></span> ${state.battle ? "ENGAGED" : "STANDING BY"}</div></div></section><section class="panel next-turn"><div><div class="eyebrow">EVERY CHOICE LEAVES A MARK</div><h3>${allies} ${allies === 1 ? "alliance" : "alliances"}. Countless possibilities.</h3><p>Advance time for production and fleet travel. Stops automatically when you are needed.</p></div>${timeControls()}</section></div>`;
@@ -259,12 +267,12 @@ function diplomacyView() {
     .join("")}</div>`;
 }
 function research() {
-  return `${heading("SCIENCE & DEVELOPMENT", "Build the means to go further.", "Invest in the discoveries and infrastructure that will shape your future.")}<div class="section-label">RESEARCH PROGRAMS <span>Immediate upgrades · applied to current and future vessels</span></div><div class="research-grid">${Object.entries(
+  return `${heading("SCIENCE & DEVELOPMENT", "Build the means to go further.", "Invest in the discoveries and infrastructure that will shape your future.")}<section class="panel era-briefing"><div class="eyebrow">${currentEra(state).interface} · ${campaignYear(state)}</div><h2>${currentEra(state).name}</h2><p>Current issue: <strong>${awayEquipment(state).weapon}</strong>. New eras update the command interface automatically. Research their sidearms to equip the next away team; phase-cannon research adds +5 damage, hull lattice reduces incoming damage by 30%, and field medicine grants an extra medical kit.</p></section><div class="section-label">RESEARCH PROGRAMS <span>Immediate upgrades · applied to current and future vessels</span></div><div class="research-grid">${Object.entries(
     TECH,
   )
     .map(
       ([id, t]) =>
-        `<section class="panel research-card"><div class="research-icon">${icon(id === "shields" ? "shield" : id === "weapons" ? "target" : "compass")}</div><span class="eyebrow">${id === "logistics" ? "OPERATIONS" : "STARSHIP SYSTEMS"}</span><h2>${t.name}</h2><p>${t.description}</p>${button(state.tech.includes(id) ? icon("check") + " Research complete" : !techAvailable(state,id) ? "Discovery required" : `Research · ${t.cost} data`, "develop", state.tech.includes(id) ? "secondary" : "primary", `data-kind="${id}" ${state.tech.includes(id) || !techAvailable(state,id) ? "disabled" : ""}`)}</section>`,
+        `<section class="panel research-card"><div class="research-icon">${icon(id === "shields" ? "shield" : id === "weapons" ? "target" : "compass")}</div><span class="eyebrow">${id === "logistics" ? "OPERATIONS" : "STARSHIP SYSTEMS"}</span><h2>${t.name}</h2><p>${t.description}</p>${button(state.tech.includes(id) ? icon("check") + " Research complete" : !techAvailable(state,id) ? t.year ? `Available in ${t.year}` : "Discovery required" : `Research · ${t.cost} data`, "develop", state.tech.includes(id) ? "secondary" : "primary", `data-kind="${id}" ${state.tech.includes(id) || !techAvailable(state,id) ? "disabled" : ""}`)}</section>`,
     )
     .join(
       "",
@@ -354,7 +362,7 @@ function renderModal() {
     return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="modal-close icon-button" data-action="dismiss" aria-label="Close dialog">${icon("close")}</button>${extra}</section></div>`;
   return `<div class="modal-backdrop"><section class="modal ${modal.type === "new" ? "wide" : ""}" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="modal-close icon-button" data-action="dismiss" aria-label="Close dialog">${icon("close")}</button>${
     modal.type === "new"
-      ? `<div class="eyebrow">EVERY CIVILIZATION HAS A BEGINNING</div><h2 id="modal-title">Whose future will you write?</h2><p>Starting a new campaign replaces your current local save. Federation is the developed origin chapter; Klingon and Romulan starts currently share its prototype event structure.</p><div class="faction-grid">${Object.entries(
+      ? `<div class="eyebrow">EVERY CIVILIZATION HAS A BEGINNING</div><h2 id="modal-title">Whose future will you write?</h2><p>Starting a new campaign replaces your current local save. Federation is the developed origin chapter; Klingon and Romulan starts currently share its prototype event structure.</p><label class="form-label" for="campaign-era">Starting era</label><select id="campaign-era">${ERAS.map(e=>`<option value="${e.year}">${e.year} · ${e.name} · ${e.weapon}</option>`).join("")}</select><p class="cost">Later starts use the same alternate-history origin chapter, with era equipment already issued. Themes change automatically as the calendar advances; future sidearms require research.</p><div class="faction-grid">${Object.entries(
           FACTIONS,
         )
           .map(
@@ -377,6 +385,7 @@ app.addEventListener("click", (e) => {
   const { action, id, kind, index, opponent } = el.dataset;
   let message = "";
   try {
+    if (action === "fps") { handleFPS(kind); return; }
     if (handleExtendedAction(action, el.dataset)) return;
     if (action === "nav") {
       navigate(el.dataset.view);
@@ -401,7 +410,7 @@ app.addEventListener("click", (e) => {
       sectorId = id;
       view = "galaxy";
     } else if (action === "start") {
-      state = createGame(id);
+      state = createGame(id, Number(document.querySelector("#campaign-era")?.value || 2151));
       modal = null;
       view = "overview";
       message = "A new voyage begins.";
@@ -527,9 +536,16 @@ app.addEventListener("submit", (e) => {
   }
 });
 document.addEventListener("keydown", (e) => {
-  if (view === "away" && state.away && !modal && !e.repeat && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) {
-    const action = { w: "forward", s: "back", a: "left", d: "right", ArrowUp: "forward", ArrowDown: "back", ArrowLeft: "left", ArrowRight: "right" }[e.key];
-    if (action) { e.preventDefault(); try { awayAction(state, action); persist(); render(); } catch (err) { toast(err.message); } }
+  if (view === "away" && state.away && !modal && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) {
+    if(e.key === "Escape") { pauseAway(); return; }
+    if(awayLive) {
+      const key=e.key.toLowerCase();
+      if(["w","a","s","d","q","e","arrowup","arrowdown","arrowleft","arrowright"," "].includes(key)) {e.preventDefault();awayKeys.add(key);}
+      if(!e.repeat && ["r","f"].includes(key)) {e.preventDefault();handleFPS(key==="r"?"reload":"scan");}
+    } else if(!e.repeat) {
+      const action = { w:"forward",s:"back",a:"left",d:"right",ArrowUp:"forward",ArrowDown:"back",ArrowLeft:"left",ArrowRight:"right" }[e.key];
+      if(action) {e.preventDefault();try{awayAction(state,action);persist();render();}catch(err){toast(err.message);}}
+    }
   }
   if (e.key === "Escape" && modal) {
     modal = null;
@@ -582,8 +598,8 @@ function missionsView() {
   }`;
 }
 function helpView() {
-  return `${heading("ACADEMY & CAMPAIGN FILES", "A little guidance. A galaxy of possibilities.", "Learn at your own pace, and keep your campaign between releases.")}<section class="panel assignment-guide"><h2>Your expanded frontier</h2><p><strong>Explore:</strong> the star chart lists 18 destinations. Scout new systems for research leads, away sites, and one-time field projects. Unidentified civilization signals reveal names and diplomacy when a fleet arrives. Origin delegations also visit your home.</p><p><strong>Away team:</strong> survey one of the six marked sites, stay in orbit, and deploy for 10 energy. Walk with W/A/S/D or the buttons, use the scanner map to approach a numbered object, scan it, then choose preservation or recovery. Recall safely at any time; completed objectives persist.</p><p><strong>Time:</strong> choose 1, 3, 6, or 12 months on Command overview. Time stops for council and monthly decisions, first contact, fleet arrivals, mission results, and new diplomatic requests. Resolve the priority transmission before continuing.</p><p><strong>Compare ships:</strong> Fleet command lists every design alongside your actual vessels, including current research bonuses and commission costs.</p></section><div class="help-grid"><section class="panel help-card"><div class="eyebrow">START HERE</div><h2>Your first five orders</h2><ol>${TUTORIAL_STEPS.map((t) => `<li><strong>${t.title.replace(/^\d\. /, "")}</strong><p>${t.text}</p></li>`).join("")}</ol><div class="action-row">${button("Replay guided tutorial", "tutorial", "primary", 'data-kind="replay"')}${button("Skip tutorial", "tutorial", "secondary", 'data-kind="skip"')}</div><p class="cost">This guide uses your current campaign. Completed milestones are remembered. Replay resets the checklist without resetting your progress.</p></section>
- <section class="panel help-card"><div class="eyebrow">YOUR CAMPAIGN, YOUR FILE</div><h2>Save, export, and continue.</h2><p>Autosave belongs to this browser and file location. Export a campaign before moving the game, switching computers, or installing a new release.</p>${button("Export campaign (.json)", "export", "primary")}<label class="form-label" for="import-file">Import a saved campaign</label><input id="import-file" type="file" accept=".json,application/json"><p class="cost">Import previews the faction and month before replacing your campaign. Original v0.1 and v0.2 saves are upgraded automatically. Invalid files leave your current campaign intact.</p><div class="notice">Browser saves do not automatically transfer between downloaded HTML files. Export here, open the new game, and import the JSON file.</div><h2 class="help-subheading">How each resource works</h2><dl class="resource-guide"><dt>Energy</dt><dd>Travel, surveys, construction, and trade.</dd><dt>Alloys</dt><dd>New vessels, repairs, and relief supplies.</dd><dt>Research</dt><dd>Technology that improves your economy and fleet.</dd><dt>Influence</dt><dd>Envoys, treaties, alliances, and peace negotiations.</dd></dl><p class="cost">Version ${GAME_VERSION} · Save format ${SAVE_VERSION} · Native desktop builds and a mod manager remain future milestones.</p></section></div>`;
+  return `${heading("ACADEMY & CAMPAIGN FILES", "A little guidance. A galaxy of possibilities.", "Learn at your own pace, and keep your campaign between releases.")}<section class="panel assignment-guide"><h2>Your expanded frontier</h2><p><strong>Explore:</strong> the star chart lists 18 destinations. Scout new systems for research leads, away sites, and one-time field projects. Unidentified civilization signals reveal names and diplomacy when a fleet arrives. Origin delegations also visit your home.</p><p><strong>Away team:</strong> survey one of the six marked sites, stay in orbit, and deploy for 10 energy. Select Begin mission for continuous WASD movement, mouse/arrow aiming and Space/click phaser fire. R cycles cells, F scans nearby objectives, Esc pauses. Stun is the default; high power consumes two charges. Seek cover, use field medicine, or broadcast a ceasefire. Paused step controls remain available. Recall preserves objectives; incapacitated teams can always evacuate.</p><p><strong>Time:</strong> choose 1, 3, 6, or 12 months on Command overview. Time stops for council and monthly decisions, first contact, fleet arrivals, mission results, and new diplomatic requests. Resolve the priority transmission before continuing.</p><p><strong>Compare ships:</strong> Fleet command lists every design alongside your actual vessels, including current research bonuses and commission costs.</p></section><div class="help-grid"><section class="panel help-card"><div class="eyebrow">START HERE</div><h2>Your first five orders</h2><ol>${TUTORIAL_STEPS.map((t) => `<li><strong>${t.title.replace(/^\d\. /, "")}</strong><p>${t.text}</p></li>`).join("")}</ol><div class="action-row">${button("Replay guided tutorial", "tutorial", "primary", 'data-kind="replay"')}${button("Skip tutorial", "tutorial", "secondary", 'data-kind="skip"')}</div><p class="cost">This guide uses your current campaign. Completed milestones are remembered. Replay resets the checklist without resetting your progress.</p></section>
+ <section class="panel help-card"><div class="eyebrow">YOUR CAMPAIGN, YOUR FILE</div><h2>Save, export, and continue.</h2><p>Autosave belongs to this browser and file location. Export a campaign before moving the game, switching computers, or installing a new release.</p>${button("Export campaign (.json)", "export", "primary")}<label class="form-label" for="import-file">Import a saved campaign</label><input id="import-file" type="file" accept=".json,application/json"><p class="cost">Import previews the faction and month before replacing your campaign. Original v0.1–v0.3 saves are upgraded automatically. Invalid files leave your current campaign intact.</p><div class="notice">Browser saves do not automatically transfer between downloaded HTML files. Export here, open the new game, and import the JSON file.</div><h2 class="help-subheading">How each resource works</h2><dl class="resource-guide"><dt>Energy</dt><dd>Travel, surveys, construction, and trade.</dd><dt>Alloys</dt><dd>New vessels, repairs, and relief supplies.</dd><dt>Research</dt><dd>Technology that improves your economy and fleet.</dd><dt>Influence</dt><dd>Envoys, treaties, alliances, and peace negotiations.</dd></dl><p class="cost">Version ${GAME_VERSION} · Save format ${SAVE_VERSION} · Native desktop builds and a mod manager remain future milestones.</p></section></div>`;
 }
 function extendedModal() {
   if (["ship", "fleet", "createFleet"].includes(modal.type)) {
@@ -719,29 +735,86 @@ function shipComparison() {
   return `<section class="panel comparison-panel"><div class="panel-heading"><h2>Ship comparison</h2><span class="tag">CURRENT RESEARCH INCLUDED</span></div><div class="table-scroll" tabindex="0" role="region" aria-label="Ship designs and fleet statistics"><table><caption>Available designs and every vessel under your command. Hull and shields show capacity; owned ships also show current condition.</caption><thead><tr><th scope="col">Vessel / design</th><th scope="col">Hull</th><th scope="col">Shields</th><th scope="col">Weapons</th><th scope="col">Commission cost</th><th scope="col">Role advantage</th></tr></thead><tbody>${Object.entries(ROLES).map(([id,r]) => { const stats=designStats(state,id); return `<tr class="design-row"><th scope="row">${r.name}<small>AVAILABLE DESIGN · ${state.fleet.filter(v=>v.role===id).length} owned</small></th><td>${stats.hull}</td><td>${stats.shields}</td><td>${stats.damage}</td><td>${r.cost.alloys} alloys<br>${r.cost.energy} energy</td><td>${r.description}</td></tr>`; }).join("")}${state.fleet.map(v=>`<tr><th scope="row">${escape(v.name)}<small>${escape(v.registry)} · ${escape(state.taskForces.find(f=>f.id===v.fleetId).name)}</small></th><td>${v.hull} / ${v.maxHull}</td><td>${v.shields} / ${v.maxShields}</td><td>${v.damage+(state.faction==="klingon"?4:0)}</td><td>In service</td><td>${escape(v.cls)}</td></tr>`).join("")}</tbody></table></div></section>`;
 }
 function awayScene() {
-  const a=state.away, site=AWAY_SITES[state.sectors.find(x=>x.id===a.sectorId).site];
-  const angle=a.direction*Math.PI/2-Math.PI/2, fov=Math.PI/2.6, columns=100, width=900, height=480;
-  const walls=[];
-  for(let i=0;i<columns;i++) {
-    const ray=angle+(i/(columns-1)-0.5)*fov;
-    let d=0.02;
-    while(d<14 && AWAY_LAYOUT[Math.floor(a.y+0.5+Math.sin(ray)*d)]?.[Math.floor(a.x+0.5+Math.cos(ray)*d)]!=="#") d+=0.025;
-    const corrected=d*Math.cos(ray-angle), h=Math.min(height*2, height/Math.max(0.1,corrected));
-    walls.push(`<rect x="${i*width/columns}" y="${(height-h)/2}" width="${width/columns}" height="${h}" fill="${site.color}" opacity="${Math.max(.12,.65-d*.06)}"/><path d="M${i*width/columns} ${(height-h)/2+h*.8}h${width/columns}" stroke="${site.color}" stroke-width="3"/>`);
-  }
-  const objects=AWAY_OBJECT_POSITIONS.map((p,i)=>({ ...p,i,d:Math.hypot(p.x-a.x,p.y-a.y) })).sort((x,y)=>y.d-x.d).map(p=>{
-    if(a.resolved.includes(p.i) || p.d<.1) return "";
-    let relative=Math.atan2(p.y-a.y,p.x-a.x)-angle;
-    relative=Math.atan2(Math.sin(relative),Math.cos(relative));
-    if(Math.abs(relative)>fov*.55) return "";
-    for(let t=.1;t<p.d;t+=.1) if(AWAY_LAYOUT[Math.floor(a.y+.5+(p.y-a.y)*t/p.d)]?.[Math.floor(a.x+.5+(p.x-a.x)*t/p.d)]==="#") return "";
-    const x=width/2+Math.tan(relative)/Math.tan(fov/2)*width/2, scale=Math.min(150,150/p.d);
-    return `<g transform="translate(${x},${height/2+scale*.5})"><path d="M${-scale/2} 0v${-scale}l${scale/2} ${-scale*.3} ${scale/2} ${scale*.3}v${scale}z" fill="#11151e" stroke="${site.color}" stroke-width="3"/><rect x="${-scale*.35}" y="${-scale*.8}" width="${scale*.7}" height="${scale*.4}" fill="${site.color}"/><text text-anchor="middle" y="${-scale*.49}" fill="#07070a" font-size="${Math.max(12,scale*.27)}">${p.i+1}</text></g>`;
-  }).join("");
-  return `<svg class="away-scene" viewBox="0 0 900 480" role="img" aria-label="First-person view of ${site.title}, facing ${["north","east","south","west"][a.direction]} at grid ${a.x}, ${a.y}"><defs><linearGradient id="away-floor" x2="0" y2="1"><stop stop-color="#090b12"/><stop offset="1" stop-color="#303039"/></linearGradient></defs><rect width="900" height="480" fill="#05070d"/><rect y="240" width="900" height="240" fill="url(#away-floor)"/>${walls.join("")}${objects}<path d="M438 240h24m-12-12v24" stroke="white" opacity=".55"/><text x="24" y="35" fill="${site.color}" font-size="18" font-family="monospace">VISUAL FEED // ${["NORTH","EAST","SOUTH","WEST"][a.direction]}</text><text x="24" y="455" fill="white" font-size="15" font-family="monospace">TEAM TELEMETRY NOMINAL · ${a.resolved.length}/3 OBJECTIVES</text></svg>`;
+  return `<canvas id="away-canvas" class="away-scene" width="960" height="540" tabindex="0" aria-label="First-person away mission. Begin mission, then use WASD to move, arrows to aim, Space to fire and Escape to pause.">Your browser needs Canvas support for the first-person view. Step controls and scanner remain available.</canvas>`;
 }
 function awayView() {
   if (!state.away) return `${heading("SURFACE OPERATIONS", "Step into the unknown.", "Explore from the perspective of your away team.")}<section class="panel empty-state"><h2>Your team is standing by.</h2><p>Survey a site, leave your fleet in orbit, then deploy from its star-chart briefing. Each site has three objects to scan and resolve. Completed objectives survive recall.</p><div class="away-site-list">${state.sectors.filter(s=>s.site).map(s=>`<button class="button secondary" data-action="sector" data-id="${s.id}">${s.name}<small>${state.awayHistory[s.id]?.length || 0}/3 objectives · ${s.surveyed ? "surveyed" : "survey required"}</small></button>`).join("")}</div></section>`;
   const a=state.away, sector=state.sectors.find(s=>s.id===a.sectorId), site=AWAY_SITES[sector.site], near=awayNear(state);
-  return `${heading("AWAY TEAM · " + sector.name.toUpperCase(), site.title, "W / ↑ forward · S / ↓ back · A / ← turn left · D / → turn right", button("Recall away team", "away", "secondary", 'data-kind="recall"'))}<div class="away-layout"><section class="panel away-viewport">${awayScene()}<div class="away-controls">${button("Turn left", "away", "secondary", 'data-kind="left"')}${button("Move forward", "away", "primary", 'data-kind="forward"')}${button("Turn right", "away", "secondary", 'data-kind="right"')}${button("Move back", "away", "secondary", 'data-kind="back"')}</div><p class="away-message" role="status">${escape(a.message)}</p></section><section class="panel scanner-panel"><div class="eyebrow">TRICORDER · LOCAL SCAN</div><div class="scanner-map" aria-label="Local floor plan; numbered objectives">${AWAY_LAYOUT.map((row,y)=>[...row].map((cell,x)=>{ const obj=AWAY_OBJECT_POSITIONS.findIndex(p=>p.x===x&&p.y===y); return `<span class="${cell==="#"?"wall":"floor"} ${a.x===x&&a.y===y?"player":""}">${a.x===x&&a.y===y ? ["↑","→","↓","←"][a.direction] : obj>=0 ? a.resolved.includes(obj) ? "✓" : obj+1 : ""}</span>`; }).join("")).join("")}</div><p>Move next to a numbered object to scan it. Your arrow shows your position and heading.</p><ol>${site.objects.map((name,i)=>`<li>${name} ${a.resolved.includes(i)?"✓":""}</li>`).join("")}</ol><div class="nearby-objects">${near.filter(p=>!a.resolved.includes(p.i)).map(p=>`<div class="nearby-object"><h3>${site.objects[p.i]}</h3>${button("Scan object", "away", "secondary", `data-kind="scan" data-index="${p.i}"`)}${a.scanned.includes(p.i) ? `<p>${site.scans[p.i]}</p>${button("Preserve & study · +18 research, +5 influence", "away", "primary", `data-kind="study" data-index="${p.i}"`)}${button("Recover materials · +15 alloys", "away", "secondary", `data-kind="salvage" data-index="${p.i}"`)}` : ""}</div>`).join("") || `<p>${a.resolved.length===3 ? "All objectives complete. Recall your team to resume the campaign." : "No unresolved object within reach. Follow your scanner."}</p>`}</div></section></div>`;
+  return `${heading("AWAY TEAM · " + sector.name.toUpperCase(), site.title, "Live: WASD move · Mouse / arrows aim · Space / click fire · R cycle cell · F scan · Esc pause", button("Recall away team", "away", "secondary", 'data-kind="recall"'))}<div class="away-layout"><section class="panel away-viewport">${awayScene()}${combatControls()}<div class="away-controls step-controls"><span class="cost">Paused step controls</span>${button("Turn left", "away", "secondary", 'data-kind="left"')}${button("Move forward", "away", "primary", 'data-kind="forward"')}${button("Turn right", "away", "secondary", 'data-kind="right"')}${button("Move back", "away", "secondary", 'data-kind="back"')}</div><p class="away-message" role="status">${escape(a.message)}</p></section><section class="panel scanner-panel"><div class="eyebrow">TRICORDER · LOCAL SCAN</div><div class="scanner-map" aria-label="Local floor plan; numbered objectives">${AWAY_LAYOUT.map((row,y)=>[...row].map((cell,x)=>{ const obj=AWAY_OBJECT_POSITIONS.findIndex(p=>p.x===x&&p.y===y); return `<span class="${cell==="#"?"wall":"floor"} ${a.x===x&&a.y===y?"player":""}">${a.x===x&&a.y===y ? ["↑","→","↓","←"][a.direction] : obj>=0 ? a.resolved.includes(obj) ? "✓" : obj+1 : ""}</span>`; }).join("")).join("")}</div><p>Move next to a numbered object to scan it. Your arrow shows your position and heading.</p><ol>${site.objects.map((name,i)=>`<li>${name} ${a.resolved.includes(i)?"✓":""}</li>`).join("")}</ol><div class="nearby-objects">${near.filter(p=>!a.resolved.includes(p.i)).map(p=>`<div class="nearby-object"><h3>${site.objects[p.i]}</h3>${button("Scan object", "away", "secondary", `data-kind="scan" data-index="${p.i}"`)}${a.scanned.includes(p.i) ? `<p>${site.scans[p.i]}</p>${button("Preserve & study · +18 research, +5 influence", "away", "primary", `data-kind="study" data-index="${p.i}"`)}${button("Recover materials · +15 alloys", "away", "secondary", `data-kind="salvage" data-index="${p.i}"`)}` : ""}</div>`).join("") || `<p>${a.resolved.length===3 ? "All objectives complete. Recall your team to resume the campaign." : "No unresolved object within reach. Follow your scanner."}</p>`}</div></section></div>`;
 }
+
+function combatControls() {
+  const a=state.away,gear=deployedEquipment(state);
+  return `<div class="combat-hud"><span id="away-vitals">Health ${Math.ceil(a.health)} / 100 · Cell ${a.charge} / ${gear.capacity}</span><span id="away-loadout">${gear.weapon} · ${a.mode}</span></div>
+    <div class="combat-buttons">${button("Begin mission", "fps", "primary", 'data-kind="toggle"')}${button("Fire phaser", "fps", "primary", 'data-kind="fire"')}${button("Cycle cell · R", "fps", "secondary", 'data-kind="reload"')}${button("Stun / high power", "fps", "secondary", 'data-kind="mode"')}${button("Field medicine", "fps", "secondary", 'data-kind="medkit"')}${button("Broadcast ceasefire", "fps", "secondary", 'data-kind="hail"')}</div>
+    <div class="live-movement" aria-label="Live movement controls">${[["q","↶ Turn"],["w","↑ Forward"],["e","Turn ↷"],["a","← Strafe"],["s","↓ Back"],["d","Strafe →"]].map(([k,label])=>`<button class="button secondary" data-move="${k}">${label}</button>`).join("")}</div><p class="combat-hint">${a.enemies.length ? "Threats: autonomous security" + (a.enemies.some(e=>e.kind==="raider") ? " and unaffiliated raiders" : "") + ". No faction is automatically your enemy." : "No hostile signatures. A relief and exploration mission."} Click the live viewport to capture the mouse; drag to aim if unavailable. Escape or leaving this screen pauses combat.</p>`;
+}
+function pauseAway() {
+  awayLive=false;awayKeys.clear();touchKeys.clear();
+  if(document.pointerLockElement) document.exitPointerLock?.();
+  const el=document.querySelector('[data-action="fps"][data-kind="toggle"]');if(el)el.textContent="Begin mission";
+  document.querySelectorAll(".step-controls button").forEach(b=>b.disabled=false);
+  const loadout=document.querySelector("#away-loadout");if(loadout&&state.away)loadout.textContent=`${deployedEquipment(state).weapon} · ${state.away.mode.toUpperCase()} · PAUSED`;
+  paintAway(document.querySelector("#away-canvas"),state,false);
+}
+function handleFPS(kind) {
+  try {
+    if(kind==="toggle") {
+      if(awayLive) pauseAway();
+      else if(state.away?.health>0){awayLive=true;frameTime=performance.now();awayKeys.clear();document.querySelector('[data-kind="toggle"]').textContent="Pause mission";document.querySelector("#away-canvas")?.focus({preventScroll:true});}
+    } else if(kind==="scan") {
+      const obj=awayNear(state).find(p=>!state.away.resolved.includes(p.i));
+      if(obj) {awayAction(state,"scan",obj.i);render();}
+      else toast("Move next to an objective to scan it.");
+    } else {
+      if(["fire","reload"].includes(kind)&&!awayLive){toast("Begin the mission to operate the phaser.");return;}
+      awayCombat(state,kind);
+    }
+    persist();updateAwayHUD();
+  }catch(err){toast(err.message);}
+}
+function updateAwayHUD() {
+  const a=state.away;if(!a)return;
+  const gear=deployedEquipment(state),v=document.querySelector("#away-vitals"),l=document.querySelector("#away-loadout");
+  if(v)v.textContent=`Health ${Math.ceil(a.health)} / 100 · Cell ${a.charge} / ${gear.capacity}${a.reload>0?" · CYCLING":""} · Medical kits ${a.medkits}`;
+  if(l)l.textContent=`${gear.weapon} · ${a.mode.toUpperCase()} · ${awayLive?"LIVE":"PAUSED"}`;
+  const m=document.querySelector(".away-message");if(m)m.textContent=a.message;
+  document.querySelectorAll(".step-controls button").forEach(b=>b.disabled=awayLive);
+  const stamp=JSON.stringify([a.x,a.y,a.direction,a.resolved,a.scanned]);
+  if(stamp!==awayUIStamp) {
+    awayUIStamp=stamp;
+    const preview=document.createElement("div");preview.innerHTML=awayView();
+    for(const selector of [".scanner-map",".nearby-objects"]) {
+      const target=document.querySelector(selector),fresh=preview.querySelector(selector);if(target&&fresh)target.replaceWith(fresh);
+    }
+  }
+  paintAway(document.querySelector("#away-canvas"),state,awayLive);
+}
+document.addEventListener("keyup",e=>awayKeys.delete(e.key.toLowerCase()));
+window.addEventListener("blur",()=>{pauseAway();persist();});
+document.addEventListener("visibilitychange",()=>{if(document.hidden){pauseAway();persist();}});
+document.addEventListener("pointerlockchange",()=>{if(!document.pointerLockElement){pauseAway();persist();}});
+document.addEventListener("mousemove",e=>{
+  if(awayLive && (document.pointerLockElement?.id==="away-canvas" || (e.buttons===1 && e.target.id==="away-canvas"))) awayLook(state,e.movementX*.003);
+});
+app.addEventListener("pointerdown",e=>{
+  const movement=e.target.closest("[data-move]");
+  if(movement&&awayLive){e.preventDefault();touchKeys.add(movement.dataset.move);movement.setPointerCapture?.(e.pointerId);return;}
+  if(e.target.id!=="away-canvas" || !awayLive)return;
+  if(document.pointerLockElement===e.target) {handleFPS("fire");awayKeys.add("mousefire");}
+  else {try {const promise=e.target.requestPointerLock?.();promise?.catch(()=>toast("Mouse capture unavailable. Drag the viewport or use arrow keys to aim."));}catch{toast("Drag the viewport or use arrow keys to aim.");}}
+});
+document.addEventListener("pointerup",()=>{touchKeys.clear();awayKeys.delete("mousefire");});
+document.addEventListener("pointercancel",()=>{touchKeys.clear();awayKeys.delete("mousefire");});
+function awayFrame(now) {
+  if(awayLive && state.away && view==="away" && !modal && !document.hidden) {
+    const dt=Math.min(.05,(now-frameTime)/1000);frameTime=now;
+    const held=k=>awayKeys.has(k)||touchKeys.has(k);
+    awayTick(state,{forward:Number(held("w")||held("arrowup"))-Number(held("s")||held("arrowdown")),strafe:Number(held("d"))-Number(held("a")),turn:Number(held("e")||held("arrowright"))-Number(held("q")||held("arrowleft")),fire:held(" ")||held("mousefire")},dt);
+    if(state.away.health<=0)pauseAway();
+    if(now-drawTime>32){updateAwayHUD();drawTime=now;}
+    if(now-saveTime>750){persist();saveTime=now;}
+  }
+  requestAnimationFrame(awayFrame);
+}
+requestAnimationFrame(awayFrame);
